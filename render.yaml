@@ -18,6 +18,8 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
+      - key: ADMIN_EMAILS
+        sync: false
       - key: KES_PAYMENT_INSTRUCTIONS
         sync: false
       - key: USD_KES_RATE
