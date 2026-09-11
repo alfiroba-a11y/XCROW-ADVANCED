@@ -4,7 +4,7 @@
 
 ### KES / M-Pesa STK Push — HashBack HashPay
 
-When both buyer and seller confirm that the escrow is ready, the selected depositor opens HashPay's M-Pesa checkout. The backend supplies the fixed amount and unique escrow reference; the browser only receives the public `HASHPAY_ACCOUNT_ID` required by HashPay's checkout window.
+When both buyer and seller confirm that the escrow is ready, the selected depositor sees an XCROW deposit summary and presses Deposit. XCROW sends the STK prompt server-side to the M-Pesa number saved in the depositor's profile. The amount and unique escrow reference are calculated on the server. A pending payment can receive a new STK prompt through the Resend payment prompt control.
 
 HashPay calls this signed webhook after a successful payment:
 
