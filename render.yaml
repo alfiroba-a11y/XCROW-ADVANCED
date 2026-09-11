@@ -12,7 +12,7 @@ services:
         sync: false
       - key: HASHPAY_WEBHOOK_SECRET
         sync: false
-      - key: MONGODB_URI
+      - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
         generateValue: true
