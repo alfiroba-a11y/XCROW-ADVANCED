@@ -1,24 +1,32 @@
 # XCROW.COM
 
-Account-first, shared-escrow web service for Render.
+Account-based escrow deal rooms for Render.
 
-## What is included
+## Payment workflow
 
-- Sign-up and login backed by MongoDB.
-- Persistent escrow history per account.
-- One escrow code and unique copyable buyer, seller, and third-party invite links.
-- Payment choice: **USDT on TRC20** or **Kenyan shilling (KES)**.
-- Supplied USDT TRC20 QR code, visible address, and copy button.
-- Payment-submission history and downloadable PDF receipts containing the deal, amount, buyer, seller, payer, and payment date/time.
-- HashPay SDK/webhook starter remains server-side for a future approved HashPay use case. It is not presented as an additional payment option.
+1. The buyer and seller sign up or log in.
+2. The creator makes an escrow and receives a unique five-letter code.
+3. The other main participant uses **Join existing escrow** and the code. A third party can join from their private link.
+4. Once buyer and seller are present, the selected depositor starts a secure HashPay checkout.
+5. HashPay confirms payment by signed webhook. XCROW then automatically changes the deal to **Funded** and enables its confirmed-payment receipt.
 
-## Deploy to Render
+Set the HashPay webhook endpoint to:
 
-1. Upload these files to a GitHub repository and create a new Render Blueprint from `render.yaml`.
-2. In Render, set `MONGO_URI` and a long random `JWT_SECRET`; copy the formats from `.env.example`.
-3. Optionally configure `KES_PAYMENT_INSTRUCTIONS` only after your Kenyan payment provider is approved and operational.
-4. Add a HashPay API key, organization ID, and webhook secret only if you intend to use the retained HashPay server integration.
+`https://YOUR-RENDER-SERVICE.onrender.com/webhooks/hashpay`
 
-## Important before accepting real money
+## Required Render variables
 
-The interface records payment submissions; it does not verify an on-chain USDT transfer or connect to a Kenyan payment gateway yet. Implement server-side transaction verification, idempotent webhook storage, release rules, KYC/AML, sanctions screening, secure custody, and appropriate licensing/legal review before operating a real escrow service.
+- `MONGO_URI`
+- `JWT_SECRET`
+- `HASHPAY_API_KEY`
+- `HASHPAY_ACCOUNT_ID` or `HASHPAY_ORGANIZATION_ID`
+- `HASHPAY_WEBHOOK_SECRET`
+- `USD_KES_RATE` (used to convert KES fee tiers to USDT)
+
+## Kenyan-shilling payments
+
+HashPay's documented checkout integration creates crypto invoices using a token and blockchain network. This project therefore creates automatic HashPay checkout for USDT/TRC20. To automate KES payments, a Kenyan payment provider with a server-to-server webhook must be connected; payment instructions or credentials for that provider are not part of the current HashPay credentials.
+
+## Safety
+
+Before operating a real escrow service, obtain relevant legal, custody, KYC/AML, sanctions, and payment-provider approvals. Never mark a payment funded from a browser action; XCROW marks it funded only from the signed HashPay webhook.
