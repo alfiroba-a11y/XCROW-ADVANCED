@@ -1,17 +1,24 @@
 # XCROW.COM
 
-High-trust escrow experience and HashPay invoice starter for Node 20+.
+Account-first, shared-escrow web service for Render.
 
-## Run locally
+## What is included
 
-1. Copy `.env.example` to `.env` and set the HashPay values in your shell or host.
-2. `npm install`
-3. `npm start`
+- Sign-up and login backed by MongoDB.
+- Persistent escrow history per account.
+- One escrow code and unique copyable buyer, seller, and third-party invite links.
+- Strict payment choice: **USDT on TRC20 only** or **Kenyan shilling (KES)**.
+- Supplied USDT TRC20 QR code, visible address, and copy button.
+- Payment-submission history and downloadable PDF receipts containing the deal, amount, buyer, seller, payer, and payment date/time.
+- HashPay SDK/webhook starter remains server-side for a future approved HashPay use case. It is not presented as an additional payment option.
 
 ## Deploy to Render
 
-Push this folder to a Git repository, create a Render Blueprint using `render.yaml`, then enter the three HashPay variables in Render's environment settings. Register `https://YOUR-DOMAIN/webhooks/hashpay` as a HashPay webhook. The raw-body handler verifies the signature before accepting events.
+1. Upload these files to a GitHub repository and create a new Render Blueprint from `render.yaml`.
+2. In Render, set `MONGODB_URI` and a long random `JWT_SECRET`; copy the formats from `.env.example`.
+3. Optionally configure `KES_PAYMENT_INSTRUCTIONS` only after your Kenyan payment provider is approved and operational.
+4. Add a HashPay API key, organization ID, and webhook secret only if you intend to use the retained HashPay server integration.
 
-## Important production scope
+## Important before accepting real money
 
-This is a front-end product prototype plus an invoice/webhook integration starter. It does not itself establish regulated escrow, custody, KYC/AML, tax, sanctions screening, or chargeback protection. Before holding or releasing client funds, involve qualified legal/compliance counsel and a licensed escrow/custody provider in each operating jurisdiction; implement an authenticated database ledger, idempotent webhook storage, user identity verification, role permissions, and independent release authorization.
+The interface records payment submissions; it does not verify an on-chain USDT transfer or connect to a Kenyan payment gateway yet. Implement server-side transaction verification, idempotent webhook storage, release rules, KYC/AML, sanctions screening, secure custody, and appropriate licensing/legal review before operating a real escrow service.

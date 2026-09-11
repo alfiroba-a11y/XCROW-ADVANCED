@@ -1,56 +1,35 @@
 import crypto from 'node:crypto';
 import express from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
+import PDFDocument from 'pdfkit';
 import { HashPayClient, constructWebhookEvent } from '@hashpay.me/sdk';
 
-const app = express();
-const port = process.env.PORT || 3000;
+const app = express(); const port = process.env.PORT || 3000; const jwtSecret = process.env.JWT_SECRET; const usdtAddress = 'THESvopuBtMGHnbok39ZUBh2EkV7m4Kwne';
+const User = mongoose.model('User', new mongoose.Schema({ name: { type: String, required: true, trim: true }, email: { type: String, unique: true, required: true, lowercase: true, trim: true }, passwordHash: { type: String, required: true } }, { timestamps: true }));
+const Deal = mongoose.model('Deal', new mongoose.Schema({ code: { type: String, unique: true, required: true }, title: { type: String, required: true }, description: { type: String, required: true }, amount: { type: Number, required: true }, currency: { type: String, enum: ['USDT', 'KES'], required: true }, fee: { payer: { type: String, enum: ['buyer', 'seller', 'both'], required: true }, amount: Number, sourceKes: Number, rate: Number, buyerTotal: Number, sellerReceives: Number }, creator: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, parties: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, name: String, role: { type: String, enum: ['buyer', 'seller', 'third_party'] } }], status: { type: String, default: 'Awaiting parties' }, payments: [{ method: String, amount: Number, paidBy: String, paidAt: Date, reference: String }] }, { timestamps: true }));
+const hashpay = process.env.HASHPAY_API_KEY && process.env.HASHPAY_ORGANIZATION_ID ? new HashPayClient({ apiKey: process.env.HASHPAY_API_KEY, organizationId: process.env.HASHPAY_ORGANIZATION_ID }) : null;
+if (process.env.MONGODB_URI) mongoose.connect(process.env.MONGODB_URI).then(() => console.log('MongoDB connected')).catch(error => console.error('MongoDB connection failed:', error.message));
 
-// HashPay credentials never reach the browser. Configure these in Render.
-const hashpay = process.env.HASHPAY_API_KEY && process.env.HASHPAY_ORGANIZATION_ID
-  ? new HashPayClient({
-      apiKey: process.env.HASHPAY_API_KEY,
-      organizationId: process.env.HASHPAY_ORGANIZATION_ID,
-    })
-  : null;
-
-app.post('/webhooks/hashpay', express.raw({ type: '*/*' }), (req, res) => {
-  if (!process.env.HASHPAY_WEBHOOK_SECRET) return res.status(503).send('Webhook is not configured');
-  try {
-    const signature = req.get('X-HashPay-Signature') || '';
-    const event = constructWebhookEvent(req.body.toString('utf8'), signature, process.env.HASHPAY_WEBHOOK_SECRET);
-    // TODO: Persist the event id and update only the matching deal after idempotency checks.
-    console.info('Verified HashPay event', event.type, event.id);
-    return res.sendStatus(204);
-  } catch (error) {
-    console.error('Invalid HashPay webhook', error.message);
-    return res.status(400).send('Invalid signature');
-  }
-});
-
-app.use(express.json());
-app.use(express.static('public'));
-
-app.post('/api/checkout', async (req, res) => {
-  const { amount, settlementCurrency = 'USD', tokenSymbol = 'USDT', network = 'tron' } = req.body || {};
-  if (!/^[0-9]+(\.[0-9]{1,2})?$/.test(String(amount)) || Number(amount) <= 0) {
-    return res.status(400).json({ error: 'Enter a valid amount.' });
-  }
-  if (!hashpay) {
-    return res.status(503).json({
-      error: 'HashPay is not configured yet.',
-      setup: 'Set HASHPAY_API_KEY and HASHPAY_ORGANIZATION_ID in Render, then retry.'
-    });
-  }
-  try {
-    const invoice = await hashpay.createInvoice({
-      amount: String(amount), settlementCurrency, tokenSymbol, network,
-    });
-    return res.json({ checkoutUrl: invoice.checkoutUrl, invoiceId: invoice.id });
-  } catch (error) {
-    console.error('HashPay invoice error', error.message);
-    return res.status(502).json({ error: 'Could not create a HashPay invoice. Please try again.' });
-  }
-});
-
-app.get('/health', (_req, res) => res.json({ status: 'ok', hashpayConfigured: Boolean(hashpay), requestId: crypto.randomUUID() }));
+app.post('/webhooks/hashpay', express.raw({ type: '*/*' }), (req, res) => { try { if (!process.env.HASHPAY_WEBHOOK_SECRET) throw new Error(); const event = constructWebhookEvent(req.body.toString('utf8'), req.get('X-HashPay-Signature') || '', process.env.HASHPAY_WEBHOOK_SECRET); console.info('Verified HashPay event', event.type); res.sendStatus(204); } catch { res.status(400).send('Invalid webhook signature'); } });
+app.use(express.json()); app.use(express.static('public'));
+function requireDatabase(_req, res, next) { if (mongoose.connection.readyState !== 1) return res.status(503).json({ error: 'Database is not connected. Configure MONGODB_URI in Render.' }); next(); }
+function auth(req, res, next) { try { const token = req.get('Authorization')?.replace('Bearer ', ''); if (!token || !jwtSecret) throw new Error(); req.user = jwt.verify(token, jwtSecret); next(); } catch { res.status(401).json({ error: 'Please sign in again.' }); } }
+function dealCode() { return `XC-${crypto.randomBytes(3).toString('hex').toUpperCase()}`; }
+function publicDeal(deal) { const d = deal.toObject(); return { ...d, invites: { buyer: `/join/${d.code}/buyer`, seller: `/join/${d.code}/seller`, third_party: `/join/${d.code}/third_party` } }; }
+function feeInKes(amountKes) { if (amountKes < 2000) return 0; if (amountKes < 8000) return 200; if (amountKes < 16000) return 400; if (amountKes < 26000) return 700; if (amountKes < 35000) return 1000; if (amountKes < 47000) return 1500; if (amountKes < 58000) return 2000; if (amountKes < 71000) return 2500; if (amountKes < 91000) return 3000; if (amountKes < 130000) return 4000; if (amountKes <= 200000) return 5000; return 7000; }
+function calculateFee(amount, currency, payer) { const rate = Number(process.env.USD_KES_RATE || 130); const amountKes = currency === 'USDT' ? amount * rate : amount; const sourceKes = feeInKes(amountKes); const fee = currency === 'USDT' ? Number((sourceKes / rate).toFixed(2)) : sourceKes; const buyerTotal = Number((amount + (payer === 'buyer' ? fee : payer === 'both' ? fee / 2 : 0)).toFixed(2)); const sellerReceives = Number((amount - (payer === 'seller' ? fee : payer === 'both' ? fee / 2 : 0)).toFixed(2)); return { payer, amount: fee, sourceKes, rate, buyerTotal, sellerReceives }; }
+app.post('/api/fees', (req, res) => { const { amount, currency, payer = 'buyer' } = req.body || {}; if (!Number(amount) || !['USDT', 'KES'].includes(currency) || !['buyer', 'seller', 'both'].includes(payer)) return res.status(400).json({ error: 'Enter a valid amount, currency, and fee payer.' }); res.json(calculateFee(Number(amount), currency, payer)); });
+app.post('/api/auth/signup', requireDatabase, async (req, res) => { const { name, email, password } = req.body || {}; if (!name || !/^\S+@\S+\.\S+$/.test(email || '') || String(password).length < 8) return res.status(400).json({ error: 'Enter your name, a valid email, and a password of at least 8 characters.' }); try { const user = await User.create({ name, email, passwordHash: await bcrypt.hash(password, 12) }); const token = jwt.sign({ id: user.id, name: user.name }, jwtSecret, { expiresIn: '7d' }); res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email } }); } catch { res.status(409).json({ error: 'An account already exists with this email.' }); } });
+app.post('/api/auth/login', requireDatabase, async (req, res) => { const user = await User.findOne({ email: String(req.body?.email || '').toLowerCase() }); if (!user || !await bcrypt.compare(req.body?.password || '', user.passwordHash)) return res.status(401).json({ error: 'Incorrect email or password.' }); const token = jwt.sign({ id: user.id, name: user.name }, jwtSecret, { expiresIn: '7d' }); res.json({ token, user: { id: user.id, name: user.name, email: user.email } }); });
+app.get('/api/deals', requireDatabase, auth, async (req, res) => { const deals = await Deal.find({ 'parties.user': req.user.id }).sort({ updatedAt: -1 }); res.json(deals.map(publicDeal)); });
+app.post('/api/deals', requireDatabase, auth, async (req, res) => { const { title, description, amount, currency, creatorRole, feePayer } = req.body || {}; if (!title || !description || !Number(amount) || !['USDT', 'KES'].includes(currency) || !['buyer', 'seller'].includes(creatorRole) || !['buyer', 'seller', 'both'].includes(feePayer)) return res.status(400).json({ error: 'Complete all deal fields.' }); let code = dealCode(); while (await Deal.exists({ code })) code = dealCode(); const deal = await Deal.create({ code, title, description, amount, currency, fee: calculateFee(Number(amount), currency, feePayer), creator: req.user.id, parties: [{ user: req.user.id, name: req.user.name, role: creatorRole }] }); res.status(201).json(publicDeal(deal)); });
+app.get('/api/join/:code/:role', requireDatabase, auth, async (req, res) => { const deal = await Deal.findOne({ code: req.params.code }); if (!deal || !['buyer', 'seller', 'third_party'].includes(req.params.role)) return res.status(404).json({ error: 'This invite is invalid.' }); res.json({ deal: publicDeal(deal), role: req.params.role }); });
+app.post('/api/join/:code/:role', requireDatabase, auth, async (req, res) => { const deal = await Deal.findOne({ code: req.params.code }); const role = req.params.role; if (!deal || !['buyer', 'seller', 'third_party'].includes(role)) return res.status(404).json({ error: 'This invite is invalid.' }); if (deal.parties.some(p => p.role === role && String(p.user) !== req.user.id)) return res.status(409).json({ error: `The ${role.replace('_', ' ')} role has already joined.` }); if (!deal.parties.some(p => String(p.user) === req.user.id)) deal.parties.push({ user: req.user.id, name: req.user.name, role }); deal.status = deal.parties.some(p => p.role === 'buyer') && deal.parties.some(p => p.role === 'seller') ? 'Ready for payment' : 'Awaiting parties'; await deal.save(); res.json(publicDeal(deal)); });
+app.post('/api/deals/:id/payments', requireDatabase, auth, async (req, res) => { const deal = await Deal.findById(req.params.id); if (!deal || !deal.parties.some(p => String(p.user) === req.user.id)) return res.status(404).json({ error: 'Deal not found.' }); const { method, reference } = req.body || {}; if (!['USDT_TRC20', 'KES'].includes(method)) return res.status(400).json({ error: 'Unsupported payment method.' }); deal.payments.push({ method, amount: deal.fee?.buyerTotal ?? deal.amount, paidBy: req.user.name, paidAt: new Date(), reference: reference || `XCROW-${crypto.randomUUID().slice(0, 8).toUpperCase()}` }); deal.status = 'Payment submitted — awaiting verification'; await deal.save(); res.status(201).json(publicDeal(deal)); });
+app.get('/api/deals/:id/receipt/:paymentId', requireDatabase, auth, async (req, res) => { const deal = await Deal.findById(req.params.id); const payment = deal?.payments.id(req.params.paymentId); if (!deal || !payment || !deal.parties.some(p => String(p.user) === req.user.id)) return res.status(404).json({ error: 'Receipt not found.' }); const buyer = deal.parties.find(p => p.role === 'buyer')?.name || 'Pending'; const seller = deal.parties.find(p => p.role === 'seller')?.name || 'Pending'; res.setHeader('Content-Type', 'application/pdf'); res.setHeader('Content-Disposition', `attachment; filename="XCROW-${deal.code}-receipt.pdf"`); const pdf = new PDFDocument({ margin: 54 }); pdf.pipe(res); pdf.fillColor('#155bff').fontSize(25).text('XCROW.COM'); pdf.fillColor('#111827').fontSize(17).text('Payment receipt', { align: 'right' }); pdf.moveDown(2); [['Escrow code', deal.code], ['Payment reference', payment.reference], ['Payment for', deal.title], ['Escrow amount', `${deal.amount.toLocaleString()} ${deal.currency}`], ['Escrow fee', `${deal.fee?.amount?.toLocaleString() ?? 0} ${deal.currency} (${deal.fee?.payer ?? 'buyer'} pays)`], ['Total paid', `${payment.amount.toLocaleString()} ${deal.currency}`], ['Payment method', payment.method === 'USDT_TRC20' ? 'USDT (TRC20 only)' : 'Kenyan shilling'], ['Buyer', buyer], ['Seller', seller], ['Paid by', payment.paidBy], ['Date & time', new Date(payment.paidAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })]].forEach(([key, value]) => { pdf.font('Helvetica-Bold').text(key); pdf.font('Helvetica').text(value); pdf.moveDown(.55); }); pdf.moveDown(); pdf.fontSize(9).fillColor('#4b5563').text('This receipt records a payment submission in XCROW. Final escrow funding status is subject to payment verification.'); pdf.end(); });
+app.get('/api/payment-config', (_req, res) => res.json({ usdtAddress, kesInstructions: process.env.KES_PAYMENT_INSTRUCTIONS || 'Kenyan shilling payment is available after a verified payment-provider setup.' }));
+app.get('/health', (_req, res) => res.json({ status: 'ok', database: mongoose.connection.readyState === 1, hashpayConfigured: Boolean(hashpay) }));
+app.get('/join/:code/:role', (_req, res) => res.sendFile(new URL('./public/index.html', import.meta.url).pathname));
 app.listen(port, () => console.log(`XCROW running on :${port}`));
