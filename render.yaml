@@ -8,6 +8,8 @@ services:
     envVars:
       - key: HASHPAY_API_KEY
         sync: false
+      - key: HASHPAY_ACCOUNT_ID
+        sync: false
       - key: HASHPAY_ORGANIZATION_ID
         sync: false
       - key: HASHPAY_WEBHOOK_SECRET
