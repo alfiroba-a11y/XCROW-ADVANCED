@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: xcrow
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: HASHPAY_API_KEY
+        sync: false
+      - key: HASHPAY_ORGANIZATION_ID
+        sync: false
+      - key: HASHPAY_WEBHOOK_SECRET
+        sync: false
