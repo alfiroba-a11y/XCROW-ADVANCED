@@ -26,6 +26,13 @@ Do not use a screenshot as proof of a crypto transfer. Screenshots can be altere
 - `HASHPAY_WEBHOOK_SECRET` — HashBack webhook signing secret
 - `HASHPAY_API_KEY` and `HASHPAY_ORGANIZATION_ID` — required for HashPay's USDT hosted invoice API
 - `USD_KES_RATE`
+- `ADMIN_EMAILS` — comma-separated administrator email addresses permitted to use the operations panel
+- `ADMIN_PASSWORD` — a long, private administrator password; it is required for every `#admin` sign-in
+- `ADMIN_NAME` — optional display name for the protected administrator account
+
+## Protected administrator access
+
+Set `ADMIN_EMAILS` and `ADMIN_PASSWORD` in Render, save the values, then redeploy. Open `/#admin` and sign in with one of the listed email addresses and the `ADMIN_PASSWORD`. The first successful sign-in creates that administrator record automatically. Public sign-up is blocked for every address in `ADMIN_EMAILS`, and ordinary user logins never receive administrator access.
 
 ## Webhook setup
 
