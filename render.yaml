@@ -20,6 +20,8 @@ services:
         generateValue: true
       - key: ADMIN_EMAILS
         sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
       - key: KES_PAYMENT_INSTRUCTIONS
         sync: false
       - key: USD_KES_RATE

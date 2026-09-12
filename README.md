@@ -27,10 +27,11 @@ Do not use a screenshot as proof of a crypto transfer. Screenshots can be altere
 - `HASHPAY_API_KEY` and `HASHPAY_ORGANIZATION_ID` — required for HashPay's USDT hosted invoice API
 - `USD_KES_RATE`
 - `ADMIN_EMAILS` — comma-separated administrator email addresses permitted to use the operations panel
+- `ADMIN_PASSWORD` — private password accepted only through `/#admin`
 
 ## Protected administrator access
 
-Create an account first with the email address in `ADMIN_EMAILS`, then use that account's own password at `/#admin`. An address in `ADMIN_EMAILS` receives the protected administrator role only after it has signed up. The service never creates accounts during login.
+Open `/#admin` and use an email in `ADMIN_EMAILS` together with `ADMIN_PASSWORD`. The administrator portal has no sign-up path and the service never creates accounts during login. The matching administrator user record must already exist in MongoDB.
 
 ## Webhook setup
 
