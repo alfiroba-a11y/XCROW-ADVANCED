@@ -31,7 +31,7 @@ Do not use a screenshot as proof of a crypto transfer. Screenshots can be altere
 
 ## Protected administrator access
 
-Open `/#admin` and use an email in `ADMIN_EMAILS` together with `ADMIN_PASSWORD`. The administrator portal has no sign-up path and the service never creates accounts during login. The matching administrator user record must already exist in MongoDB.
+Open `/#admin` and use an email in `ADMIN_EMAILS` together with `ADMIN_PASSWORD`. The administrator portal has no sign-up path. After both server-held values match, XCROW provisions the protected administrator record if needed; ordinary public login never does this and never receives administrator access.
 
 ## Webhook setup
 
