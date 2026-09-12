@@ -89,14 +89,15 @@
     if (note) { note.textContent = 'Use the administrator email in Render ADMIN_EMAILS and the private ADMIN_PASSWORD set in Render.'; const signup = document.querySelector('#login [data-switch="signup"]'); if (signup?.closest('p')) signup.closest('p').hidden = true; }
   }
   function secureAdminForm() {
-    const form = document.querySelector('#login.auth-form');
+    const form = document.querySelector('#login .auth-form');
     if (!form || form.dataset.adminSecure || location.hash !== '#admin') return;
     form.dataset.adminSecure = '1'; form.onsubmit = async event => { event.preventDefault(); const message = form.querySelector('.message'); message.textContent = 'Signing in securely…'; message.style.color = '#15803d'; try { const payload = Object.fromEntries(new FormData(form)); const response = await fetch('/api/auth/admin-login', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(payload) }); const data = await response.json(); if (!response.ok) throw new Error(data?.error || 'Administrator sign-in failed.'); localStorage.setItem('xcrow_token', data.token); localStorage.setItem('xcrow_user', JSON.stringify(data.user)); location.reload(); } catch (error) { message.textContent = error.message; message.style.color = '#b91c1c'; } };
   }
   function showStkApprovalFlow() {
     const current = window.xcrowState?.deals?.find(deal => deal._id === window.xcrowState?.active);
     const payment = current?.payments?.at(-1);
-    if (!current || current.currency !== 'KES' || !payment || payment.method !== 'KES_STK' || payment.status !== 'pending') return;
+    const currentRole = current?.parties?.find(party => String(party.user) === String(window.xcrowState?.user?.id))?.role;
+    if (!current || current.currency !== 'KES' || currentRole !== current.depositRole || !payment || payment.method !== 'KES_STK' || payment.status !== 'pending') return;
     const flowKey = `xcrow-stk-flow-${payment.reference}`;
     if (sessionStorage.getItem(`${flowKey}-dismissed`) || document.querySelector('#stk-approval-flow')) return;
     const modal = document.createElement('div'); modal.id = 'stk-approval-flow'; modal.innerHTML = `<div class="stk-card"><button type="button" class="stk-close" aria-label="Close">×</button><div class="stk-rings"><span>◉</span></div><div class="stk-brand">XCROW SECURE PAYMENT</div><h2>STK prompt sent</h2><p>Approve the M-Pesa prompt on your phone.</p><b>Checking your XCROW payment securely…</b><small>Reference: ${safe(payment.reference)}</small><div class="stk-state">Awaiting approval</div><button type="button" class="copy stk-resend">Resend prompt</button></div>`; document.body.append(modal);
