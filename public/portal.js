@@ -60,6 +60,29 @@
     const button = document.createElement('button'); button.id = 'live-support'; button.className = 'button'; button.innerHTML = '<img src="/support-bot.svg" alt="" style="width:20px;height:20px;vertical-align:middle;margin-right:7px">Live support'; Object.assign(button.style, { position:'fixed', right:'18px', bottom:'18px', zIndex:90 }); document.body.append(button);
     button.onclick = async () => { try { const existing = await api('/api/support/ticket'); const dialog = document.createElement('dialog'); dialog.innerHTML = `<form class="modal"><button class="close" type="button">×</button><span class="tag">XCROW HELP DESK</span><h2>Live human support</h2><p>Message the XCROW Support team directly. Replies arrive here automatically while this conversation is open.</p><div id="support-conversation" style="max-height:230px;overflow:auto">${existing?.messages?.map(message => `<p><b>${safe(message.sender)}</b><br>${safe(message.body)}</p>`).join('') || '<p>No messages yet. Send a message to start.</p>'}</div><textarea name="body" required placeholder="Describe your issue" style="width:100%;margin:10px 0;padding:10px"></textarea><button class="button">Send to XCROW Support</button></form>`; document.body.append(dialog); dialog.showModal(); const refresh = async () => { try { const ticket = await api('/api/support/ticket'); const area = dialog.querySelector('#support-conversation'); if (ticket && area) area.innerHTML = ticket.messages.map(message => `<p><b>${safe(message.sender)}</b><br>${safe(message.body)}<br><small>${new Date(message.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</small></p>`).join(''); } catch {} }; const timer = setInterval(refresh, 2000); dialog.querySelector('.close').onclick = () => { clearInterval(timer); dialog.close(); }; dialog.querySelector('form').onsubmit = async event => { event.preventDefault(); try { await api('/api/support/ticket', { method:'POST', body:JSON.stringify({ body:new FormData(event.currentTarget).get('body') }) }); event.currentTarget.elements.body.value = ''; await refresh(); } catch (error) { notice(error.message); } }; } catch (error) { notice(error.message); } };
   }
+  async function verifySessionAndName() {
+    const stored = localStorage.getItem('xcrow_token');
+    if (!stored || window.__xcrowSessionChecked) return;
+    window.__xcrowSessionChecked = true;
+    try {
+      const response = await fetch('/api/auth/me', { headers: { Authorization:`Bearer ${stored}` } });
+      const data = await response.json();
+      if (!response.ok || !data?.user?.id) throw new Error();
+      localStorage.setItem('xcrow_user', JSON.stringify(data.user));
+      if (window.xcrowState) { window.xcrowState.user = data.user; document.querySelector('#side-name') && (document.querySelector('#side-name').textContent = data.user.name); }
+      const heading = document.querySelector('#history-view h2'); if (heading) heading.textContent = `Welcome, ${data.user.name}`;
+    } catch { localStorage.removeItem('xcrow_token'); localStorage.removeItem('xcrow_user'); location.assign('/'); }
+  }
+  function renameWallet() {
+    document.querySelectorAll('.side').forEach(item => { if (item.dataset.view === 'settings') item.textContent = '◈ Wallet'; });
+    const setup = document.querySelector('.setup-card'); if (setup) { const label = setup.querySelector('b'); const action = setup.querySelector('button'); if (label) label.textContent = 'Configure Wallet first ◈'; if (action) action.textContent = 'Open Wallet'; }
+    const settings = document.querySelector('#settings-view'); if (settings?.textContent) { const tag = settings.querySelector('.tag'); const heading = settings.querySelector('h2'); if (tag) tag.textContent = 'WALLET'; if (heading) heading.textContent = 'Configure Wallet'; }
+  }
+  function customizeReceiptButton() {
+    const receipt = document.querySelector('.receipt[data-receipt]'); if (!receipt || receipt.dataset.customized) return;
+    receipt.dataset.customized = '1'; receipt.textContent = 'Download official receipt ↓'; receipt.style.cssText = 'display:inline-flex;align-items:center;background:#11213d;border:0;border-radius:7px;color:#fff;cursor:pointer;font-size:12px;font-weight:700;margin:14px 0;padding:11px 14px;text-decoration:none;';
+    receipt.setAttribute('title', 'Download your XCROW payment or release receipt');
+  }
   async function addAdminTickets() {
     const panel = document.querySelector('#admin-view[data-portal-ready]'); if (!panel || panel.querySelector('#admin-tickets')) return;
     try { const tickets = await api('/api/admin/support-tickets'); const section = document.createElement('section'); section.id = 'admin-tickets'; section.className = 'admin-list'; section.innerHTML = `<h3>Live support inbox</h3>${tickets.map(ticket => `<div class="invite-box"><b>${safe(ticket.userName)} · ${safe(ticket.email)}</b><p>${ticket.messages.map(message => `<b>${safe(message.sender)}:</b> ${safe(message.body)}`).join('<br>')}</p><textarea data-ticket="${ticket._id}" placeholder="Reply as XCROW Support"></textarea><button class="button" data-reply="${ticket._id}">Reply</button></div>`).join('') || '<p>No support messages yet.</p>'}`; panel.append(section); section.querySelectorAll('[data-reply]').forEach(button => button.onclick = async () => { try { const body = section.querySelector(`[data-ticket="${button.dataset.reply}"]`).value; await api(`/api/admin/support-tickets/${button.dataset.reply}/reply`, { method:'POST', body:JSON.stringify({ body }) }); notice('Support reply sent.'); section.remove(); addAdminTickets(); } catch (error) { notice(error.message); } }); } catch {};
@@ -69,7 +92,8 @@
     const code = tag.textContent.match(/[A-Z]{5}/)?.[0]; if (!code) return;
     try { const messages = await api(`/api/deals/code/${code}/messages`); const signature = messages.map(message => `${message._id}:${message.updatedAt}`).join('|'); if (chat.dataset.signature === signature) return; chat.dataset.signature = signature; chat.innerHTML = messages.length ? messages.map(message => `<p><b>${safe(message.senderName)}</b><span>${safe(message.body)}</span><small>${new Date(message.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</small></p>`).join('') : '<small>No messages yet. Start the conversation.</small>'; chat.scrollTop = chat.scrollHeight; } catch {};
   }
-  setInterval(() => { if (location.hash === '#admin') { if (!document.querySelector('#admin-view')?.dataset.portalReady) renderAdmin(); addAdminTickets(); } addTrcRequest(); addLiveSupport(); }, 500);
+  verifySessionAndName();
+  setInterval(() => { if (location.hash === '#admin') { if (!document.querySelector('#admin-view')?.dataset.portalReady) renderAdmin(); addAdminTickets(); } addTrcRequest(); addLiveSupport(); renameWallet(); customizeReceiptButton(); }, 500);
   setInterval(refreshEscrowConversation, 2000);
   setInterval(() => { const inbox = document.querySelector('#admin-tickets'); if (inbox && !inbox.contains(document.activeElement)) { inbox.remove(); addAdminTickets(); } }, 3000);
 })();
