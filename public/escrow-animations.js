@@ -1,4 +1,4 @@
-(() => {
+(() => { try {
   const css = `
   .security-stream{inset:0;opacity:.38;overflow:hidden;pointer-events:none;position:absolute;z-index:0}.security-stream canvas{height:100%;width:100%}.hero>*:not(.security-stream){position:relative;z-index:1}
   .escrow-motion-panel{background:linear-gradient(145deg,#0d1b35,#172a4f);border:1px solid #28466f;border-radius:14px;color:#fff;margin:18px 0;padding:18px;position:relative;overflow:hidden}.escrow-motion-panel:after{background:radial-gradient(circle,#38bdf833 0,transparent 66%);content:"";height:230px;position:absolute;right:-85px;top:-100px;width:230px}.live-status{align-items:center;color:#cbd5e1;display:flex;font-size:11px;font-weight:700;gap:7px;letter-spacing:.04em;text-transform:uppercase}.live-dot{background:#38d996;border-radius:50%;box-shadow:0 0 0 0 #38d99699;height:8px;width:8px;animation:xcrowLivePulse 1.9s infinite}.live-dot.settled{background:#93c5fd;box-shadow:none;animation:none}@keyframes xcrowLivePulse{65%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
@@ -25,7 +25,8 @@
   function animateHashes() { document.querySelectorAll('.hash-lock:not(.locked)').forEach(box => { const target = box.dataset.hash || ''; const next = target.split('').map((character, index) => Math.random() > .68 ? character : Math.floor(Math.random() * 16).toString(16).toUpperCase()).join(''); box.textContent = next; }); }
   document.addEventListener('click', event => { const row = event.target.closest('.deal-row'); if (!row) return; row.classList.remove('ledger-turn'); void row.offsetWidth; row.classList.add('ledger-turn'); });
   installStream();
-  new MutationObserver(renderEscrowMotion).observe(document.body,{childList:true,subtree:true});
+  let animationQueued = false;
+  new MutationObserver(() => { if (animationQueued) return; animationQueued = true; requestAnimationFrame(() => { animationQueued = false; renderEscrowMotion(); }); }).observe(document.body,{childList:true,subtree:true});
   setInterval(renderEscrowMotion, 1200);
-  setInterval(animateHashes, 85);
-})();
+  setInterval(animateHashes, 250);
+} catch (error) { console.warn('XCROW visual enhancement disabled safely:', error); } })();
