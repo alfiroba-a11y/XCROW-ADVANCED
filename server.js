@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 import PDFDocument from 'pdfkit';
 import { HashPayClient, constructWebhookEvent } from '@hashpay.me/sdk';
 
-const app = express(); const port = process.env.PORT || 3000; const jwtSecret = process.env.JWT_SECRET; const usdtAddress = 'THESvopuBtMGHnbok39ZUBh2EkV7m4Kwne'; const release = 'xcrow-stable-2026-09-13-5';
+const app = express(); const port = process.env.PORT || 3000; const jwtSecret = process.env.JWT_SECRET; const usdtAddress = 'THESvopuBtMGHnbok39ZUBh2EkV7m4Kwne'; const release = 'xcrow-stable-2026-09-13-7';
 process.on('unhandledRejection', error => console.error('Unhandled XCROW promise rejection:', error));
 process.on('uncaughtException', error => console.error('Uncaught XCROW error:', error));
 // Express 4 does not forward rejected async route handlers by default. Wrap
@@ -43,6 +43,10 @@ mongoose.connection.on('disconnected', () => { if (mongoUri && !mongoRetryTimer)
 connectDatabase();
 
 function validSignature(expected, received) { const a = Buffer.from(expected); const b = Buffer.from(received); return a.length === b.length && crypto.timingSafeEqual(a, b); }
+// Browser clients can safely use the Render origin as a fallback when a custom
+// domain/proxy drops a request. Authentication uses bearer tokens, not cookies.
+const publicOrigins = new Set(['https://xcrow.online', 'https://www.xcrow.online', 'https://www.xcrow.com']);
+app.use((req, res, next) => { const origin = req.get('Origin'); if (origin && publicOrigins.has(origin)) res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type'); res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS'); if (req.method === 'OPTIONS') return res.sendStatus(204); next(); });
 // Log before body parsing. This records every inbound API request without ever
 // logging passwords, tokens, or request bodies.
 app.use((req, res, next) => { const startedAt = Date.now(); let finished = false; res.on('finish', () => { finished = true; console.info(`HTTP ${req.method} ${req.path} ${res.statusCode} ${Date.now() - startedAt}ms`); }); res.on('close', () => { if (!finished) console.warn(`HTTP closed before response ${req.method} ${req.path}`); }); next(); });
