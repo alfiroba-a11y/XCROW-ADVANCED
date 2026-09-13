@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 import PDFDocument from 'pdfkit';
 import { HashPayClient, constructWebhookEvent } from '@hashpay.me/sdk';
 
-const app = express(); const port = process.env.PORT || 3000; const jwtSecret = process.env.JWT_SECRET; const usdtAddress = 'THESvopuBtMGHnbok39ZUBh2EkV7m4Kwne';
+const app = express(); const port = process.env.PORT || 3000; const jwtSecret = process.env.JWT_SECRET; const usdtAddress = 'THESvopuBtMGHnbok39ZUBh2EkV7m4Kwne'; const release = 'xcrow-stable-2026-09-13-3';
 process.on('unhandledRejection', error => console.error('Unhandled XCROW promise rejection:', error));
 process.on('uncaughtException', error => console.error('Uncaught XCROW error:', error));
 // Express 4 does not forward rejected async route handlers by default. Wrap
@@ -108,7 +108,7 @@ app.get('/api/deals/:id/receipt/:paymentId', requireDatabase, auth, async (req, 
 // Render probes this endpoint continuously. It must remain HTTP 200 during a
 // short MongoDB reconnect; otherwise Render can remove or restart a healthy
 // web process and browsers see ERR_CONNECTION_CLOSED.
-app.get('/health', (_req, res) => { const database = mongoose.connection.readyState === 1; res.json({ status: database ? 'ok' : 'degraded', database, hashpayConfigured: Boolean(hashpay) }); });
+app.get('/health', (_req, res) => { const database = mongoose.connection.readyState === 1; res.json({ status: database ? 'ok' : 'degraded', database, hashpayConfigured: Boolean(hashpay), release, uptimeSeconds: Math.round(process.uptime()) }); });
 app.get('/api/payment-info', (_req, res) => res.json({ usdtAddress }));
 app.get('/join/:code/:role', (_req, res) => res.sendFile(new URL('./public/index.html', import.meta.url).pathname));
 app.use((error, _req, res, _next) => { console.error('Unhandled XCROW request error:', error.message); if (res.headersSent) return; res.status(500).json({ error: 'XCROW could not complete that request. Please retry.' }); });
