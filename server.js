@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 import PDFDocument from 'pdfkit';
 import { HashPayClient, constructWebhookEvent } from '@hashpay.me/sdk';
 
-const app = express(); const port = process.env.PORT || 3000; const jwtSecret = process.env.JWT_SECRET; const usdtAddress = 'THESvopuBtMGHnbok39ZUBh2EkV7m4Kwne'; const release = 'xcrow-stable-2026-09-13-7';
+const app = express(); const port = process.env.PORT || 3000; const jwtSecret = process.env.JWT_SECRET; const usdtAddress = 'THESvopuBtMGHnbok39ZUBh2EkV7m4Kwne'; const release = 'xcrow-stable-2026-09-13-8';
 process.on('unhandledRejection', error => console.error('Unhandled XCROW promise rejection:', error));
 process.on('uncaughtException', error => console.error('Uncaught XCROW error:', error));
 // Express 4 does not forward rejected async route handlers by default. Wrap
