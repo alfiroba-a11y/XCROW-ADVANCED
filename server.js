@@ -43,6 +43,20 @@ mongoose.connection.on('disconnected', () => { if (mongoUri && !mongoRetryTimer)
 connectDatabase();
 
 function validSignature(expected, received) { const a = Buffer.from(expected); const b = Buffer.from(received); return a.length === b.length && crypto.timingSafeEqual(a, b); }
+// This is supplied with every STK request. Keeping it here prevents a
+// HashPay portal setting from silently stopping automatic confirmations.
+const hashbackWebhookUrl = String(process.env.HASHPAY_WEBHOOK_URL || process.env.PUBLIC_BASE_URL || 'https://xcrow.online').replace(/\/$/, '') + '/webhooks/hashpay';
+async function fundPayment(deal, payment, { reference, providerId } = {}) {
+  if (!deal || !payment || payment.status === 'paid') return false;
+  payment.status = 'paid';
+  payment.paidAt = new Date();
+  if (reference) payment.reference = String(reference);
+  if (providerId) payment.invoiceId = String(providerId);
+  deal.status = 'Funded';
+  await deal.save();
+  console.info('XCROW payment funded', { deal: deal.code, method: payment.method, reference: payment.reference });
+  return true;
+}
 // Browser clients can safely use the Render origin as a fallback when a custom
 // domain/proxy drops a request. Authentication uses bearer tokens, not cookies.
 const publicOrigins = new Set(['https://xcrow.online', 'https://www.xcrow.online', 'https://www.xcrow.com']);
@@ -50,7 +64,37 @@ app.use((req, res, next) => { const origin = req.get('Origin'); if (origin && pu
 // Log before body parsing. This records every inbound API request without ever
 // logging passwords, tokens, or request bodies.
 app.use((req, res, next) => { const startedAt = Date.now(); let finished = false; res.on('finish', () => { finished = true; console.info(`HTTP ${req.method} ${req.path} ${res.statusCode} ${Date.now() - startedAt}ms`); }); res.on('close', () => { if (!finished) console.warn(`HTTP closed before response ${req.method} ${req.path}`); }); next(); });
-app.post('/webhooks/hashpay', express.raw({ type: '*/*' }), async (req, res) => { try { const raw = req.body; const signature = req.get('X-HashPay-Signature') || ''; if (signature.startsWith('sha256=')) { const expected = `sha256=${crypto.createHmac('sha256', process.env.HASHPAY_WEBHOOK_SECRET || '').update(raw).digest('hex')}`; if (!validSignature(expected, signature)) return res.status(401).send('Invalid signature'); const payload = JSON.parse(raw.toString('utf8')); if (payload.event === 'payment.success' && Number(payload.ResponseCode) === 0) { const deal = await Deal.findOne({ 'payments.reference': payload.TransactionReference }); const payment = deal?.payments.find(item => item.reference === payload.TransactionReference); if (payment && payment.status !== 'paid' && Number(payment.amount) === Number(payload.TransactionAmount)) { payment.status = 'paid'; payment.paidAt = new Date(); payment.reference = payload.TransactionReference; payment.invoiceId = payload.TransactionID || payload.CheckoutRequestID; deal.status = 'Funded'; await deal.save(); } } return res.sendStatus(200); } const event = constructWebhookEvent(raw.toString('utf8'), signature, process.env.HASHPAY_WEBHOOK_SECRET); const invoiceId = event.data?.invoiceId || event.data?.id || event.data?.invoice?.id; if (event.type === 'invoice.paid' && invoiceId) { const deal = await Deal.findOne({ 'payments.invoiceId': invoiceId }); const payment = deal?.payments.find(item => item.invoiceId === invoiceId); if (payment && payment.status !== 'paid') { payment.status = 'paid'; payment.paidAt = new Date(); payment.reference = event.data?.transactionHash || event.data?.paymentId || invoiceId; deal.status = 'Funded'; await deal.save(); } } return res.sendStatus(204); } catch (error) { console.error('HashPay webhook rejected:', error.message); return res.status(400).send('Invalid webhook signature'); } });
+app.post('/webhooks/hashpay', express.raw({ type: '*/*' }), async (req, res) => {
+  try {
+    const raw = req.body;
+    const signature = req.get('X-HashPay-Signature') || '';
+    if (signature.startsWith('sha256=')) {
+      const expected = `sha256=${crypto.createHmac('sha256', process.env.HASHPAY_WEBHOOK_SECRET || '').update(raw).digest('hex')}`;
+      if (!validSignature(expected, signature)) return res.status(401).send('Invalid signature');
+      const payload = JSON.parse(raw.toString('utf8'));
+      if (payload.event === 'payment.success' && Number(payload.ResponseCode) === 0) {
+        const reference = String(payload.TransactionReference || '');
+        const deal = await Deal.findOne({ 'payments.reference': reference });
+        const payment = deal?.payments.find(item => item.reference === reference);
+        if (payment && Number(payment.amount) === Number(payload.TransactionAmount)) {
+          await fundPayment(deal, payment, { reference, providerId: payload.TransactionID || payload.CheckoutRequestID });
+        } else console.warn('HashPay webhook did not match a pending XCROW payment', { reference, amount: payload.TransactionAmount });
+      }
+      return res.sendStatus(200);
+    }
+    const event = constructWebhookEvent(raw.toString('utf8'), signature, process.env.HASHPAY_WEBHOOK_SECRET);
+    const invoiceId = event.data?.invoiceId || event.data?.id || event.data?.invoice?.id;
+    if (event.type === 'invoice.paid' && invoiceId) {
+      const deal = await Deal.findOne({ 'payments.invoiceId': invoiceId });
+      const payment = deal?.payments.find(item => item.invoiceId === invoiceId);
+      if (payment) await fundPayment(deal, payment, { reference: event.data?.transactionHash || event.data?.paymentId || invoiceId, providerId: invoiceId });
+    }
+    return res.sendStatus(204);
+  } catch (error) {
+    console.error('HashPay webhook rejected:', error.message);
+    return res.status(400).send('Invalid webhook signature');
+  }
+});
 app.use(express.json());
 app.get('/app.js', async (_req, res, next) => { try { const [core, additions, adminUi] = await Promise.all([readFile('public/app.js', 'utf8'), readFile('public/portal.js', 'utf8'), readFile('public/admin-dashboard.js', 'utf8')]); res.set('Cache-Control', 'no-store').type('application/javascript').send(`${core}\n${additions}\n${adminUi}`); } catch (error) { next(error); } });
 app.use(express.static('public', { setHeaders: (res, file) => { if (file.endsWith('.html') || file.endsWith('.js')) res.set('Cache-Control', 'no-store'); } }));
@@ -73,7 +117,21 @@ function publicDeal(deal) { const value = deal.toObject(); if (value.status === 
 function feeInKes(amountKes) { if (amountKes < 2000) return 0; if (amountKes < 8000) return 200; if (amountKes < 16000) return 400; if (amountKes < 26000) return 700; if (amountKes < 35000) return 1000; if (amountKes < 47000) return 1500; if (amountKes < 58000) return 2000; if (amountKes < 71000) return 2500; if (amountKes < 91000) return 3000; if (amountKes < 130000) return 4000; if (amountKes <= 200000) return 5000; return 7000; }
 function feeFor(amount, currency, payer) { const rate = Number(process.env.USD_KES_RATE || 130); const sourceKes = feeInKes(currency === 'USDT' ? amount * rate : amount); const fee = currency === 'USDT' ? Number((sourceKes / rate).toFixed(2)) : sourceKes; return { payer, amount: fee, sourceKes, rate, buyerTotal: Number((amount + (payer === 'buyer' ? fee : payer === 'both' ? fee / 2 : 0)).toFixed(2)), sellerReceives: Number((amount - (payer === 'seller' ? fee : payer === 'both' ? fee / 2 : 0)).toFixed(2)) }; }
 function normalizeMpesaNumber(value) { const digits = String(value || '').replace(/\D/g, ''); if (/^0[17]\d{8}$/.test(digits)) return `254${digits.slice(1)}`; if (/^[17]\d{8}$/.test(digits)) return `254${digits}`; if (/^254[17]\d{8}$/.test(digits)) return digits; return ''; }
-async function sendStk({ amount, phone, reference }) { const msisdn = normalizeMpesaNumber(phone); if (!msisdn) throw new Error('Save a valid Kenyan M-Pesa number in Wallet, for example 0712345678.'); const response = await fetch('https://api.hashback.co.ke/initiatestk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: process.env.HASHPAY_API_KEY, account_id: process.env.HASHPAY_ACCOUNT_ID, amount: String(amount), msisdn, reference }) }); const data = await response.json().catch(() => ({})); const accepted = data.success === true || data.success === 'true' || Number(data.ResponseCode) === 0 || String(data.status || '').toLowerCase() === 'success'; if (!response.ok || !accepted) { console.error('HashPay STK rejected', { reference, status: response.status, message: data.message || data.ResponseDescription || 'No provider message' }); throw new Error(data.message || data.ResponseDescription || 'HashPay did not accept the STK request. Check your HashPay account settings.'); } console.info('HashPay STK accepted', { reference, status: response.status, checkoutId: data.checkout_id || data.CheckoutRequestID || null }); return data; }
+async function sendStk({ amount, phone, reference }) { const msisdn = normalizeMpesaNumber(phone); if (!msisdn) throw new Error('Save a valid Kenyan M-Pesa number in Wallet, for example 0712345678.'); const response = await fetch('https://api.hashback.co.ke/initiatestk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: process.env.HASHPAY_API_KEY, account_id: process.env.HASHPAY_ACCOUNT_ID, amount: String(amount), msisdn, reference, callback_webhook: hashbackWebhookUrl }) }); const data = await response.json().catch(() => ({})); const accepted = data.success === true || data.success === 'true' || Number(data.ResponseCode) === 0 || String(data.status || '').toLowerCase() === 'success'; if (!response.ok || !accepted) { console.error('HashPay STK rejected', { reference, status: response.status, message: data.message || data.ResponseDescription || 'No provider message' }); throw new Error(data.message || data.ResponseDescription || 'HashPay did not accept the STK request. Check your HashPay account settings.'); } console.info('HashPay STK accepted', { reference, status: response.status, checkoutId: data.checkout_id || data.CheckoutRequestID || null, webhook: hashbackWebhookUrl }); return data; }
+async function reconcilePendingStkPayments() {
+  if (mongoose.connection.readyState !== 1 || !process.env.HASHPAY_API_KEY || !process.env.HASHPAY_ACCOUNT_ID) return;
+  const deals = await Deal.find({ status: { $in: ['Deposit prompt sent', 'Deposit prompt resent'] }, payments: { $elemMatch: { method: 'KES_STK', status: 'pending', checkoutId: { $exists: true, $ne: '' } } } }).limit(20);
+  for (const deal of deals) {
+    const payment = deal.payments.find(item => item.method === 'KES_STK' && item.status === 'pending' && item.checkoutId);
+    if (!payment) continue;
+    try {
+      const response = await fetch('https://api.hashback.co.ke/transactionstatus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: process.env.HASHPAY_API_KEY, account_id: process.env.HASHPAY_ACCOUNT_ID, checkoutid: payment.checkoutId }) });
+      const result = await response.json().catch(() => ({}));
+      const completed = response.ok && Number(result.ResultCode) === 0 && /processed successfully/i.test(String(result.ResultDesc || result.ResponseDescription || ''));
+      if (completed) await fundPayment(deal, payment, { reference: payment.reference, providerId: payment.checkoutId });
+    } catch (error) { console.warn('HashPay STK reconciliation failed', { deal: deal.code, message: error.message }); }
+  }
+}
 app.post('/api/fees', (req, res) => { const { amount, currency, payer } = req.body || {}; if (!Number(amount) || !['USDT', 'KES'].includes(currency) || !['buyer', 'seller', 'both'].includes(payer)) return res.status(400).json({ error: 'Enter a valid amount and fee choice.' }); res.json(feeFor(Number(amount), currency, payer)); });
 app.post('/api/auth/signup', requireDatabase, async (req, res) => { const { name, email, password } = req.body || {}; const normalizedEmail = String(email || '').toLowerCase().trim(); if (!name || !/^\S+@\S+\.\S+$/.test(normalizedEmail) || String(password).length < 8) return res.status(400).json({ error: 'Enter your name, a valid email, and a password of at least 8 characters.' }); if (!jwtSecret) return res.status(503).json({ error: 'XCROW account creation is not configured. Set JWT_SECRET in Render and redeploy.' }); if (adminEmails().includes(normalizedEmail)) return res.status(403).json({ error: 'This email is reserved for the protected XCROW administrator portal.' }); try { const user = await User.create({ name: String(name).trim(), email: normalizedEmail, passwordHash: await bcrypt.hash(password, 12) }); const token = jwt.sign({ id: user.id, name: user.name, admin: false, sv: 1 }, jwtSecret, { expiresIn: '7d' }); res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, admin: false } }); } catch (error) { if (error?.code === 11000) return res.status(409).json({ error: 'An account already exists with this email. Please log in instead.' }); console.error('Signup failed:', error.message); res.status(503).json({ error: 'XCROW could not create the account right now. Please retry shortly.' }); } });
 app.post('/api/auth/login', requireDatabase, async (req, res) => { try { const email = String(req.body?.email || '').toLowerCase().trim(); const password = String(req.body?.password || ''); if (adminEmails().includes(email)) return res.status(403).json({ error: 'This account must sign in through the protected XCROW administrator portal.' }); const user = await User.findOne({ email }); if (!user || !password || !await bcrypt.compare(password, user.passwordHash)) return res.status(401).json({ error: 'No account matches that email and password. Create an account first.' }); if (!jwtSecret) return res.status(503).json({ error: 'XCROW sign-in is not configured. Set JWT_SECRET in Render and redeploy.' }); const token = jwt.sign({ id: user.id, name: user.name, admin: false, sv: 1 }, jwtSecret, { expiresIn: '7d' }); res.json({ token, user: { id: user.id, name: user.name, email: user.email, admin: false } }); } catch (error) { console.error('Login failed:', error.message); res.status(503).json({ error: 'XCROW could not reach the account service. Please retry shortly.' }); } });
@@ -120,6 +178,10 @@ app.get('/api/payment-info', (_req, res) => res.json({ usdtAddress }));
 app.get('/join/:code/:role', (_req, res) => res.sendFile(new URL('./public/index.html', import.meta.url).pathname));
 app.use((error, _req, res, _next) => { console.error('Unhandled XCROW request error:', error.message); if (res.headersSent) return; res.status(500).json({ error: 'XCROW could not complete that request. Please retry.' }); });
 const server = app.listen(port, () => console.log(`XCROW running on :${port}`));
+// Webhooks are the primary confirmation path. This periodic provider check is
+// deliberately limited and only covers pending STK prompts, so a delayed or
+// retried provider webhook cannot leave genuine M-Pesa funds stuck pending.
+setInterval(() => reconcilePendingStkPayments().catch(error => console.warn('STK reconciliation cycle failed:', error.message)), 30000).unref();
 // Keep these aligned for Render's reverse proxy so normal mobile requests are
 // not cut off while a database connection is being established.
 server.keepAliveTimeout = 65000;

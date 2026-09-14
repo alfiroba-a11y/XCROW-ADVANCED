@@ -8,9 +8,11 @@ When both buyer and seller confirm that the escrow is ready, the selected deposi
 
 HashPay calls this signed webhook after a successful payment:
 
-`https://YOUR-RENDER-SERVICE.onrender.com/webhooks/hashpay`
+`https://xcrow.online/webhooks/hashpay`
 
 XCROW verifies the raw-body HMAC, matches the transaction reference and amount against the pending escrow payment, and then changes the escrow to **Funded**. A browser success callback does not mark funds paid.
+
+For the live custom domain, set `HASHPAY_WEBHOOK_URL=https://xcrow.online/webhooks/hashpay` in Render. XCROW also includes that callback URL in every new STK request and reconciles a pending prompt against HashPay's transaction-status endpoint if a signed webhook is delayed.
 
 ### USDT / TRC20
 
