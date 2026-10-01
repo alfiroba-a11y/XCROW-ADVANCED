@@ -97,6 +97,8 @@ app.post('/webhooks/hashpay', express.raw({ type: '*/*' }), async (req, res) => 
   }
 });
 app.use(express.json());
+app.set('etag', false);
+app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private'); res.set('Pragma', 'no-cache'); next(); });
 app.get('/app.js', async (_req, res, next) => { try { const [core, adminUi] = await Promise.all([readFile('public/app.js', 'utf8'), readFile('public/admin-dashboard.js', 'utf8')]); res.set('Cache-Control', 'no-store').type('application/javascript').send(`${core}\n${adminUi}`); } catch (error) { next(error); } });
 app.use(express.static('public', { setHeaders: (res, file) => { if (file.endsWith('.html') || file.endsWith('.js')) res.set('Cache-Control', 'no-store'); } }));
 async function requireDatabase(_req, res, next) {
