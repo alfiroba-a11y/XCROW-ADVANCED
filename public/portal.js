@@ -140,7 +140,8 @@
   }
   verifySessionAndName(); addEscrowAnimation(); secureAdminForm();
   document.addEventListener('click', promptForMpesaBeforeDeposit, true);
-  setInterval(() => { if (location.hash === '#admin') { if (!document.querySelector('#admin-view')?.dataset.portalReady) renderAdmin(); addAdminTickets(); } addTrcRequest(); addLiveSupport(); renameWallet(); customizeReceiptButton(); correctAdminLoginCopy(); secureAdminForm(); showStkApprovalFlow(); addProfileEditor(); }, 500);
-  setInterval(refreshEscrowConversation, 2000);
-  setInterval(() => { const inbox = document.querySelector('#admin-tickets'); if (inbox && !inbox.contains(document.activeElement)) { inbox.remove(); addAdminTickets(); } }, 3000);
+  // Keep enhancement checks light. The core dashboard already refreshes deal
+  // status and chat; a frequent second polling loop made post-release pages
+  // compete for the same DOM and could leave the UI unresponsive.
+  setInterval(() => { if (location.hash === '#admin' && !document.querySelector('#admin-view')?.dataset.portalReady) renderAdmin(); addTrcRequest(); addLiveSupport(); renameWallet(); customizeReceiptButton(); correctAdminLoginCopy(); secureAdminForm(); showStkApprovalFlow(); addProfileEditor(); }, 3000);
 })();
