@@ -146,6 +146,64 @@ async function closeEscrow(deal, reason, finalStatus = '') {
   await deal.save();
   return deal;
 }
+async function sendFinalReceipt(res, deal) {
+  const finalStatus = deal.finalStatus || 'Closed';
+  const paidPayment = deal.payments.find(payment => payment.status === 'paid');
+  const buyer = deal.parties.find(party => party.role === 'buyer');
+  const seller = deal.parties.find(party => party.role === 'seller');
+  const recipientParty = finalStatus === 'Released' ? seller : finalStatus === 'Refunded' ? buyer : null;
+  const recipientAccount = recipientParty?.user ? await User.findById(recipientParty.user) : null;
+  const profile = recipientAccount?.profile || {};
+  const destination = finalStatus === 'Cancelled' ? 'No funds were settled' : deal.currency === 'KES' ? (profile.mpesaReceiveNumber || profile.mpesaNumber || 'Receiving number not provided') : (profile.trc20ReceiveAddress || profile.trc20Address || profile.binanceId || 'Receiving wallet not provided');
+  const settledAmount = finalStatus === 'Released' ? Number(deal.settledAmount ?? deal.fee?.sellerReceives ?? deal.amount) : finalStatus === 'Refunded' ? Number(deal.settledAmount ?? paidPayment?.amount ?? deal.fee?.buyerTotal ?? deal.amount) : 0;
+  const formatTime = value => value ? new Date(value).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : 'Not recorded';
+  const receiptId = `XC-${deal.code}-${String(deal._id).slice(-7).toUpperCase()}`;
+  const rows = [
+    ['Receipt ID', receiptId],
+    ['Escrow code', deal.code],
+    ['Final status', finalStatus],
+    ['Completed', formatTime(deal.closedAt || deal.completedAt)],
+    ['Payment for', deal.title],
+    ['Buyer', buyer?.name || 'Not recorded'],
+    ['Seller', seller?.name || 'Not recorded'],
+    ['Original amount', `${Number(deal.amount || 0).toLocaleString()} ${deal.currency}`],
+    ['Escrow fee', `${Number(deal.fee?.amount || 0).toLocaleString()} ${deal.currency}`],
+    ['Settlement destination', destination]
+  ];
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="XCROW-${deal.code}-${finalStatus.toLowerCase()}-receipt.pdf"`);
+  const pdf = new PDFDocument({ size: 'A4', margin: 46, info: { Title: `XCROW ${finalStatus} receipt ${deal.code}`, Author: 'XCROW.COM' } });
+  pdf.pipe(res);
+  const left = 46; const width = 503; const accent = finalStatus === 'Released' ? '#15803d' : finalStatus === 'Refunded' ? '#2563eb' : '#475569';
+  pdf.rect(0, 0, 595, 128).fill('#10233f');
+  pdf.fillColor('#ffffff').font('Helvetica-Bold').fontSize(26).text('XCROW', left, 39);
+  pdf.fillColor('#93c5fd').font('Helvetica-Bold').fontSize(9).text('SECURE ESCROW SERVICES', left, 74);
+  pdf.fillColor('#ffffff').font('Helvetica-Bold').fontSize(17).text('OFFICIAL ESCROW RECEIPT', 312, 43, { width: 237, align: 'right' });
+  pdf.fillColor('#cbd5e1').font('Helvetica').fontSize(9).text(`Issued ${formatTime(new Date())}`, 312, 74, { width: 237, align: 'right' });
+  pdf.roundedRect(left, 151, width, 113, 10).fill('#f8fafc');
+  pdf.fillColor('#64748b').font('Helvetica-Bold').fontSize(9).text(finalStatus === 'Cancelled' ? 'ESCROW SESSION' : 'FINAL SETTLEMENT AMOUNT', left + 20, 173);
+  pdf.fillColor('#172033').font('Helvetica-Bold').fontSize(29).text(finalStatus === 'Cancelled' ? 'CANCELLED' : `${settledAmount.toLocaleString()} ${deal.currency}`, left + 20, 194);
+  pdf.roundedRect(397, 186, 124, 29, 14).fill(accent);
+  pdf.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9).text(finalStatus.toUpperCase(), 397, 196, { width: 124, align: 'center' });
+  pdf.roundedRect(334, 225, 187, 26, 5).lineWidth(1.2).strokeColor(accent).stroke();
+  pdf.fillColor(accent).font('Helvetica-Bold').fontSize(6.8).text('XCROW COMPLETION STAMP', 343, 230);
+  pdf.fillColor('#334155').font('Helvetica-Bold').fontSize(7.4).text(formatTime(deal.closedAt || deal.completedAt), 343, 240, { width: 169, align: 'right' });
+  pdf.fillColor('#172033').font('Helvetica-Bold').fontSize(15).text('Receipt details', left, 298);
+  let y = 326;
+  rows.forEach(([label, value], index) => {
+    if (index % 2 === 0) pdf.rect(left, y - 6, width, 27).fill('#f8fafc');
+    pdf.fillColor('#64748b').font('Helvetica-Bold').fontSize(8.5).text(label.toUpperCase(), left + 12, y + 2);
+    pdf.fillColor('#172033').font('Helvetica').fontSize(9.5).text(String(value), 224, y + 1, { width: 311, align: 'right', ellipsis: true });
+    y += 29;
+  });
+  pdf.roundedRect(left, 632, width, 56, 8).fill('#eff6ff');
+  pdf.fillColor('#1e3a5f').font('Helvetica-Bold').fontSize(10).text('XCROW receipt record', left + 16, 648);
+  const summary = finalStatus === 'Released' ? `Funds were released to ${seller?.name || 'the seller'} after the escrow process was completed.` : finalStatus === 'Refunded' ? `Funds were refunded to ${buyer?.name || 'the buyer'} after the refund process was completed.` : finalStatus === 'Cancelled' ? 'This escrow was cancelled before a confirmed settlement was recorded.' : 'This receipt records the final closed state of this escrow session.';
+  pdf.fillColor('#475569').font('Helvetica').fontSize(8.5).text(summary, left + 16, 663, { width: width - 32, lineGap: 2 });
+  pdf.moveTo(left, 724).lineTo(left + width, 724).strokeColor('#dce3ed').stroke();
+  pdf.fillColor('#94a3b8').font('Helvetica').fontSize(8).text(`XCROW.COM  •  ${receiptId}  •  Generated securely as a PDF record`, left, 742, { width, align: 'center' });
+  pdf.end();
+}
 async function closeInactiveEscrows() {
   if (mongoose.connection.readyState !== 1) return;
   const cutoff = new Date(Date.now() - 60 * 60 * 1000);
@@ -268,6 +326,7 @@ app.patch('/api/support/ticket/status', requireDatabase, auth, async (req, res) 
 app.get('/api/admin/support-tickets', requireDatabase, auth, admin, async (_req, res) => res.json(await SupportTicket.find({ status: 'open' }).sort({ updatedAt: -1 }).limit(200)));
 app.post('/api/admin/support-tickets/:id/reply', requireDatabase, auth, admin, async (req, res) => { const ticket = await SupportTicket.findById(req.params.id); const body = String(req.body?.body || '').trim().slice(0, 1500); if (!ticket || !body) return res.status(400).json({ error: 'Ticket and reply are required.' }); ticket.messages.push({ sender: 'Escrow live support', body, at: new Date() }); ticket.status = 'open'; await ticket.save(); res.json(ticket); });
 app.patch('/api/admin/support-tickets/:id/status', requireDatabase, auth, admin, async (req, res) => { const status = req.body?.status; if (!['open', 'resolved'].includes(status)) return res.status(400).json({ error: 'Choose a valid support status.' }); const ticket = await SupportTicket.findById(req.params.id); if (!ticket) return res.status(404).json({ error: 'Support conversation was not found.' }); ticket.status = status; await ticket.save(); res.json(ticket); });
+app.get('/api/deals/:id/receipt', requireDatabase, auth, async (req, res) => { const deal = await Deal.findById(req.params.id); if (!deal || !isMember(deal, req.user.id)) return res.status(404).json({ error: 'Receipt not found.' }); if (deal.status !== 'Closed') return res.status(409).json({ error: 'The final PDF receipt is available once this escrow has ended.' }); await sendFinalReceipt(res, deal); });
 app.get('/api/deals/:id/receipt/:paymentId', requireDatabase, auth, async (req, res) => { const deal = await Deal.findById(req.params.id); const payment = deal?.payments.id(req.params.paymentId); if (!deal || !payment || !isMember(deal, req.user.id)) return res.status(404).json({ error: 'Receipt not found.' }); if (payment.status !== 'paid') return res.status(409).json({ error: 'A receipt is available after payment confirmation.' }); const buyerParty = deal.parties.find(p => p.role === 'buyer'); const sellerParty = deal.parties.find(p => p.role === 'seller'); const sellerAccount = sellerParty?.user ? await User.findById(sellerParty.user) : null; const buyer = buyerParty?.name || 'Pending'; const seller = sellerParty?.name || 'Pending'; const recipient = deal.currency === 'KES' ? sellerAccount?.profile?.mpesaNumber : (sellerAccount?.profile?.trc20Address || sellerAccount?.profile?.binanceId); const settled = deal.status === 'Released'; const formatTime = value => value ? new Date(value).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : 'Pending'; const rows = [['Escrow code', deal.code], ['Transaction reference', payment.reference || `XCROW-${deal.code}`], ['Payment method', payment.method === 'KES_STK' ? 'Kenyan Shilling - M-Pesa' : 'USDT - TRC20'], ['Payment for', deal.title], ['Funded', formatTime(payment.paidAt)], ['Buyer', buyer], ['Seller', seller], ['Status', settled ? 'Released' : deal.status], ['Released', settled ? formatTime(deal.completedAt) : 'Pending'], ['Recipient', recipient || 'Seller destination not provided']]; res.setHeader('Content-Type', 'application/pdf'); res.setHeader('Content-Disposition', `attachment; filename="XCROW-${deal.code}-receipt.pdf"`); const pdf = new PDFDocument({ size: 'A4', margin: 46, info: { Title: `XCROW receipt ${deal.code}`, Author: 'XCROW.COM' } }); pdf.pipe(res); const left = 46; const width = 503; pdf.rect(0, 0, 595, 115).fill('#11213d'); pdf.fillColor('#ffffff').font('Helvetica-Bold').fontSize(26).text('XCROW', left, 38); pdf.fillColor('#93c5fd').fontSize(10).text('ESCROW SERVICES  |  OFFICIAL TRANSACTION RECEIPT', left, 71); pdf.fillColor('#ffffff').fontSize(18).text(settled ? 'RELEASE RECEIPT' : 'PAYMENT RECEIPT', 350, 41, { width: 199, align: 'right' }); pdf.fillColor('#bfdbfe').font('Helvetica').fontSize(9).text(`Issued ${formatTime(new Date())}`, 350, 71, { width: 199, align: 'right' }); pdf.roundedRect(left, 137, width, 104, 10).fill('#eff6ff'); pdf.fillColor('#47627f').font('Helvetica-Bold').fontSize(10).text(settled ? 'AMOUNT RELEASED TO SELLER' : 'AMOUNT FUNDED', left + 22, 159); pdf.fillColor('#172033').fontSize(29).text(`${Number(settled ? (deal.fee?.sellerReceives ?? payment.amount) : payment.amount).toLocaleString()} ${deal.currency}`, left + 22, 180); pdf.fillColor(settled ? '#15803d' : '#2563eb').roundedRect(408, 168, 113, 28, 14).fill(); pdf.fillColor('#ffffff').fontSize(10).text(settled ? 'RELEASED' : 'FUNDED', 408, 177, { width: 113, align: 'center' }); pdf.fillColor('#172033').font('Helvetica-Bold').fontSize(15).text('Transaction details', left, 275); let y = 303; rows.forEach(([label, value], index) => { if (index % 2 === 0) pdf.rect(left, y - 6, width, 27).fill('#f8fafc'); pdf.fillColor('#64748b').font('Helvetica-Bold').fontSize(9).text(label.toUpperCase(), left + 12, y + 2); pdf.fillColor('#172033').font('Helvetica').fontSize(10).text(String(value), 225, y + 1, { width: 310, align: 'right', ellipsis: true }); y += 29; }); pdf.moveTo(left, 575).lineTo(left + width, 575).strokeColor('#dce3ed').stroke(); pdf.fillColor('#172033').font('Helvetica-Bold').fontSize(11).text('Receipt summary', left, 594); pdf.fillColor('#64748b').font('Helvetica').fontSize(9).text(settled ? `Payment released to ${seller}. Keep this receipt as your record of settlement.` : 'This receipt confirms that the escrow is funded.', left, 613, { width, lineGap: 3 }); pdf.fillColor('#94a3b8').fontSize(8).text(`XCROW.COM  |  Receipt ID: XC-${deal.code}-${String(payment._id).slice(-6).toUpperCase()}  |  Generated securely`, left, 740, { width, align: 'center' }); pdf.end(); });
 // Render probes this endpoint continuously. It must remain HTTP 200 during a
 // short MongoDB reconnect; otherwise Render can remove or restart a healthy
