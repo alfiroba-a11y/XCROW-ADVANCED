@@ -1,0 +1,16 @@
+/* XCROW uses one web font throughout the public site, member app and admin portal. */
+:root { --sans: "Open Sans", Arial, Helvetica, sans-serif; }
+html, body { overflow-x: hidden; }
+body, button, input, textarea, select, .wallet, code, pre {
+  font-family: var(--sans) !important;
+  font-synthesis: none;
+}
+.hero em, .cta em, .payment-strip em {
+  font-family: var(--sans) !important;
+  font-style: normal;
+  font-weight: 700;
+}
+@media (max-width: 700px) {
+  body { font-size: 15px; }
+  h1, h2, h3, p, a, button, input, textarea, select { overflow-wrap: anywhere; }
+}
