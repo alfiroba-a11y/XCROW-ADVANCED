@@ -12,5 +12,7 @@
     ,"jsonwebtoken": "^9.0.2"
     ,"mongoose": "^8.9.0"
     ,"pdfkit": "^0.16.0"
+    ,"@simplewebauthn/server": "^10.0.1"
+    ,"google-auth-library": "^9.14.2"
   }
 }

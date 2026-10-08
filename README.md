@@ -30,6 +30,14 @@ Do not use a screenshot as proof of a crypto transfer. Screenshots can be altere
 - `USD_KES_RATE`
 - `ADMIN_EMAILS` — comma-separated administrator email addresses permitted to use the operations panel
 - `ADMIN_PASSWORD` — private password accepted only through `/#admin`
+- `WEBAUTHN_RP_ID=xcrow.online` and `WEBAUTHN_ORIGIN=https://xcrow.online` — required for passkey sign-in on the live HTTPS domain
+- `GOOGLE_CLIENT_ID` — optional Google OAuth Web client ID for “Continue with Google”
+
+## Passkeys and Google sign-in
+
+Members can add a passkey from **Profile & wallet** after first signing in with their password. The device selects its own approved verification method: fingerprint, face recognition, or screen lock. XCROW receives only the cryptographic passkey result, never biometric data.
+
+For Google sign-in, create an OAuth **Web application** client in Google Cloud. Add `https://xcrow.online` and any live `www` domain in Google’s authorised JavaScript origins, then set the resulting client ID as `GOOGLE_CLIENT_ID` in Render. Google sign-in creates an ordinary member account for a verified Google email when it does not exist. It never grants administrator access.
 
 ## Protected administrator access
 
