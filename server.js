@@ -26,6 +26,11 @@ const Message = mongoose.model('Message', new mongoose.Schema({ deal: { type: mo
 const AdminAction = mongoose.model('AdminAction', new mongoose.Schema({ admin: mongoose.Schema.Types.ObjectId, deal: mongoose.Schema.Types.ObjectId, action: String, note: String }, { timestamps: true }));
 const DealFeedback = mongoose.model('DealFeedback', new mongoose.Schema({ deal: { type: mongoose.Schema.Types.ObjectId, ref: 'Deal', required: true }, user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, rating: { type: Number, required: true, min: 1, max: 5 }, comment: { type: String, trim: true, maxlength: 600, default: '' } }, { timestamps: true }));
 const SupportTicket = mongoose.model('SupportTicket', new mongoose.Schema({ user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, guestId: { type: String, unique: true, sparse: true }, userName: String, email: String, code: { type: String, unique: true, sparse: true }, category: { type: String, default: 'General' }, priority: { type: String, default: 'normal' }, messages: [{ sender: String, body: String, at: Date }], status: { type: String, enum: ['open', 'resolved'], default: 'open' } }, { timestamps: true }));
+// Inspection duration is stored as total hours for compatibility with existing
+// escrows, but new deals may choose any whole-hour value up to one year.
+const inspectionHoursPath = Deal.schema.path('inspectionHours');
+inspectionHoursPath.validators = inspectionHoursPath.validators.filter(validator => validator.type !== 'enum');
+inspectionHoursPath.enumValues = [];
 const hashpay = process.env.HASHPAY_API_KEY && (process.env.HASHPAY_ORGANIZATION_ID || process.env.HASHPAY_ACCOUNT_ID) ? new HashPayClient({ apiKey: process.env.HASHPAY_API_KEY, organizationId: process.env.HASHPAY_ORGANIZATION_ID || process.env.HASHPAY_ACCOUNT_ID }) : null;
 const mongoUri = String(process.env.MONGO_URI || process.env.MONGODB_URI || '').trim();
 let mongoConnectAttempt = null;
@@ -143,8 +148,10 @@ function publicDeal(deal) { const value = deal.toObject(); if (value.status === 
 app.post('/api/deals', requireDatabase, auth, async (req, res) => {
   const { title, description, amount, currency, creatorRole, feePayer, depositRole, automation = 'manual' } = req.body || {};
   const cryptoChain = req.body?.cryptoChain || 'TRC20';
-  const inspectionHours = Number(req.body?.inspectionHours || 48);
-  if (!title || !description || !Number(amount) || !['USDT', 'KES'].includes(currency) || (currency === 'USDT' && !['TRC20', 'BEP20'].includes(cryptoChain)) || !['buyer', 'seller'].includes(creatorRole) || !['buyer', 'seller'].includes(depositRole) || !['buyer', 'seller', 'both'].includes(feePayer) || !['manual', 'bot'].includes(automation) || ![24, 48, 168].includes(inspectionHours)) return res.status(400).json({ error: 'Complete every deal field and choose a supported crypto network.' });
+  const inspectionDuration = Number(req.body?.inspectionDuration ?? req.body?.inspectionHours ?? 48);
+  const inspectionUnit = req.body?.inspectionUnit || 'hours';
+  const inspectionHours = inspectionDuration * (inspectionUnit === 'days' ? 24 : 1);
+  if (!title || !description || !Number(amount) || !['USDT', 'KES'].includes(currency) || (currency === 'USDT' && !['TRC20', 'BEP20'].includes(cryptoChain)) || !['buyer', 'seller'].includes(creatorRole) || !['buyer', 'seller'].includes(depositRole) || !['buyer', 'seller', 'both'].includes(feePayer) || !['manual', 'bot'].includes(automation) || !['hours', 'days'].includes(inspectionUnit) || !Number.isInteger(inspectionDuration) || inspectionDuration < 1 || inspectionHours > 8760) return res.status(400).json({ error: 'Choose a whole-number inspection period from 1 hour up to 365 days.' });
   let dealCode = code(); while (await Deal.exists({ code: dealCode })) dealCode = code();
   const deal = await Deal.create({ code: dealCode, title, description, amount: Number(amount), currency, cryptoChain: currency === 'USDT' ? cryptoChain : undefined, automation, inspectionHours, depositRole: automation === 'bot' ? 'buyer' : depositRole, fee: feeFor(Number(amount), currency, feePayer), creator: req.user.id, parties: [{ user: req.user.id, name: req.user.name, role: creatorRole }] });
   if (automation === 'bot') await botMessage(deal, `🤖 Welcome to Automated XCROW Bot.\n🔑 Share code ${deal.code} with the other party.\n📋 Deal: ${deal.title}.\n⏱️ Review window: ${inspectionHours} hours.\n✨ Type /help for useful prompts.`);
