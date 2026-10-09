@@ -14,9 +14,9 @@ XCROW verifies the raw-body HMAC, matches the transaction reference and amount a
 
 For the live custom domain, set `HASHPAY_WEBHOOK_URL=https://xcrow.online/webhooks/hashpay` in Render. XCROW also includes that callback URL in every new STK request and reconciles a pending prompt against HashPay's transaction-status endpoint if a signed webhook is delayed.
 
-### USDT / TRC20
+### USDT / TRC20 and BEP20
 
-XCROW uses HashPay's hosted USDT/TRON invoice checkout. That checkout presents the payment QR code and wallet address and HashPay confirms its result by signed webhook.
+XCROW supports USDT on TRON (TRC20) and BNB Smart Chain (BEP20). The escrow creator chooses the chain when creating a USDT escrow; the selected chain is saved with the deal and used for the HashPay invoice. The matching address and QR are shown in the deal room, with a copy-address control. Continue through the HashPay hosted checkout so the invoice can be matched and confirmed by signed webhook.
 
 Do not use a screenshot as proof of a crypto transfer. Screenshots can be altered and do not prove final on-chain settlement. Use HashPay's signed invoice confirmation instead.
 

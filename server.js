@@ -9,7 +9,7 @@ import { HashPayClient, constructWebhookEvent } from '@hashpay.me/sdk';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server';
 import { OAuth2Client } from 'google-auth-library';
 
-const app = express(); const port = process.env.PORT || 3000; const jwtSecret = process.env.JWT_SECRET; const usdtAddress = 'THESvopuBtMGHnbok39ZUBh2EkV7m4Kwne'; const release = 'xcrow-stable-2026-09-13-9';
+const app = express(); const port = process.env.PORT || 3000; const jwtSecret = process.env.JWT_SECRET; const usdtAddress = 'THESvopuBtMGHnbok39ZUBh2EkV7m4Kwne'; const usdtBep20Address = '0x352b897c40ae74619ed792932a1e561ebcb7331e'; const release = 'xcrow-stable-2026-09-13-9';
 const googleClient = new OAuth2Client();
 process.on('unhandledRejection', error => console.error('Unhandled XCROW promise rejection:', error));
 process.on('uncaughtException', error => console.error('Uncaught XCROW error:', error));
@@ -21,7 +21,7 @@ for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
   app[method] = (...args) => register(...args.map(arg => typeof arg === 'function' && arg.constructor?.name === 'AsyncFunction' ? (req, res, next) => Promise.resolve(arg(req, res, next)).catch(next) : arg));
 }
 const User = mongoose.model('User', new mongoose.Schema({ name: { type: String, required: true, trim: true }, email: { type: String, unique: true, required: true, lowercase: true, trim: true }, passwordHash: { type: String, required: true }, profile: { mpesaNumber: { type: String, default: '' }, mpesaReceiveNumber: { type: String, default: '' }, trc20Address: { type: String, default: '' }, trc20ReceiveAddress: { type: String, default: '' }, binanceId: { type: String, default: '' } }, passkeys: [{ credentialID: { type: String, required: true }, publicKey: { type: Buffer, required: true }, counter: { type: Number, default: 0 }, transports: [String], createdAt: { type: Date, default: Date.now } }], webauthn: { registrationChallenge: String, authenticationChallenge: String, challengeExpiresAt: Date } }, { timestamps: true }));
-const Deal = mongoose.model('Deal', new mongoose.Schema({ code: { type: String, unique: true, required: true }, title: String, description: String, amount: Number, currency: { type: String, enum: ['USDT', 'KES'] }, automation: { type: String, enum: ['manual', 'bot'], default: 'manual' }, depositRole: { type: String, enum: ['buyer', 'seller'], default: 'buyer' }, inspectionHours: { type: Number, enum: [24, 48, 168], default: 48 }, deliverySubmittedAt: Date, deliveryNote: { type: String, default: '' }, fee: { payer: String, amount: Number, sourceKes: Number, rate: Number, buyerTotal: Number, sellerReceives: Number }, creator: mongoose.Schema.Types.ObjectId, parties: [{ user: mongoose.Schema.Types.ObjectId, name: String, role: { type: String, enum: ['buyer', 'seller', 'third_party'] } }], readyBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], botConfirmedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], refundAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], pauseAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], resumeAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], cancelAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], pausedFrom: String, releaseRequestedAt: Date, completedAt: Date, completedBy: mongoose.Schema.Types.ObjectId, settledAmount: Number, settledToName: String, settledToRole: String, settlementType: String, closedAt: Date, closeReason: String, finalStatus: String, appealedAt: Date, status: { type: String, default: 'Awaiting participants' }, payments: [{ invoiceId: String, checkoutId: String, checkoutUrl: String, method: String, amount: Number, status: { type: String, default: 'pending' }, paidAt: Date, reference: String }] }, { timestamps: true }));
+const Deal = mongoose.model('Deal', new mongoose.Schema({ code: { type: String, unique: true, required: true }, title: String, description: String, amount: Number, currency: { type: String, enum: ['USDT', 'KES'] }, cryptoChain: { type: String, enum: ['TRC20', 'BEP20'], default: 'TRC20' }, automation: { type: String, enum: ['manual', 'bot'], default: 'manual' }, depositRole: { type: String, enum: ['buyer', 'seller'], default: 'buyer' }, inspectionHours: { type: Number, enum: [24, 48, 168], default: 48 }, deliverySubmittedAt: Date, deliveryNote: { type: String, default: '' }, fee: { payer: String, amount: Number, sourceKes: Number, rate: Number, buyerTotal: Number, sellerReceives: Number }, creator: mongoose.Schema.Types.ObjectId, parties: [{ user: mongoose.Schema.Types.ObjectId, name: String, role: { type: String, enum: ['buyer', 'seller', 'third_party'] } }], readyBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], botConfirmedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], refundAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], pauseAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], resumeAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], cancelAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], pausedFrom: String, releaseRequestedAt: Date, completedAt: Date, completedBy: mongoose.Schema.Types.ObjectId, settledAmount: Number, settledToName: String, settledToRole: String, settlementType: String, closedAt: Date, closeReason: String, finalStatus: String, appealedAt: Date, status: { type: String, default: 'Awaiting participants' }, payments: [{ invoiceId: String, checkoutId: String, checkoutUrl: String, method: String, amount: Number, chain: { type: String, enum: ['TRC20', 'BEP20'] }, status: { type: String, default: 'pending' }, paidAt: Date, reference: String }] }, { timestamps: true }));
 const Message = mongoose.model('Message', new mongoose.Schema({ deal: { type: mongoose.Schema.Types.ObjectId, ref: 'Deal', required: true }, sender: mongoose.Schema.Types.ObjectId, senderName: String, body: { type: String, required: true, trim: true, maxlength: 1500 } }, { timestamps: true }));
 const AdminAction = mongoose.model('AdminAction', new mongoose.Schema({ admin: mongoose.Schema.Types.ObjectId, deal: mongoose.Schema.Types.ObjectId, action: String, note: String }, { timestamps: true }));
 const DealFeedback = mongoose.model('DealFeedback', new mongoose.Schema({ deal: { type: mongoose.Schema.Types.ObjectId, ref: 'Deal', required: true }, user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, rating: { type: Number, required: true, min: 1, max: 5 }, comment: { type: String, trim: true, maxlength: 600, default: '' } }, { timestamps: true }));
@@ -63,13 +63,13 @@ async function fundPayment(deal, payment, { reference, providerId } = {}) {
   return true;
 }
 const partyName = (deal, role) => deal.parties.find(item => item.role === role)?.name || (role === 'buyer' ? 'Buyer' : 'Seller');
-const botMessage = (deal, body) => Message.create({ deal: deal.id, senderName: 'Automated XCROW Bot', body: String(body).replace(/([.!?])\s+/g, '$1\n') });
+const botMessage = (deal, body) => { const chain = deal.cryptoChain || 'TRC20'; const network = chain === 'BEP20' ? 'BNB Smart Chain (BEP20)' : 'TRON (TRC20)'; const text = String(body).replace('USDT on TRC20 only', `USDT on ${network}`).replace('Use only the displayed QR code and address for TRC20.', `Use only the displayed QR code and address for ${network}.`); return Message.create({ deal: deal.id, senderName: 'Automated XCROW Bot', body: text.replace(/([.!?])\s+/g, '$1\n') }); };
 async function beginAutomatedDeposit(deal) {
   if (deal.automation !== 'bot' || deal.status !== 'Bot confirmation required') return;
   const buyer = deal.parties.find(item => item.role === 'buyer');
   if (!buyer) return;
   const total = deal.fee.buyerTotal;
-  if (deal.currency === 'USDT') { deal.status = 'Ready to deposit'; await deal.save(); await botMessage(deal, `${partyName(deal, 'buyer')}, send exactly ${Number(total).toLocaleString()} USDT through TRC20 using the displayed wallet and QR code. Your deposit will move to funded after secure network verification.`); return; }
+  if (deal.currency === 'USDT') { const chain = deal.cryptoChain || 'TRC20'; const network = chain === 'BEP20' ? 'BNB Smart Chain (BEP20)' : 'TRON (TRC20)'; deal.status = 'Ready to deposit'; await deal.save(); await botMessage(deal, `${partyName(deal, 'buyer')}, choose Deposit and send exactly ${Number(total).toLocaleString()} USDT through ${network}. Use only the matching address and QR shown in the secure checkout. Your deposit will move to funded after network verification.`); return; }
   const buyerAccount = await User.findById(buyer.user);
   if (!buyerAccount?.profile?.mpesaNumber) { deal.status = 'Ready to deposit'; await deal.save(); await botMessage(deal, `${partyName(deal, 'buyer')}, save your M-Pesa number in Wallet, then press Deposit to receive the secure prompt for ${Number(total).toLocaleString()} KES.`); return; }
   if (!process.env.HASHPAY_ACCOUNT_ID || !process.env.HASHPAY_API_KEY) { deal.status = 'Ready to deposit'; await deal.save(); await botMessage(deal, `Automated deposit is ready, but the payment provider is unavailable. ${partyName(deal, 'buyer')} can retry from the Deposit button.`); return; }
@@ -138,6 +138,82 @@ function hasLiveSupport(deal) { return Boolean(deal?.parties?.some(party => ['XC
 function myRole(deal, id) { return deal.parties.find(p => String(p.user) === id)?.role; }
 function code() { return Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[crypto.randomInt(24)]).join(''); }
 function publicDeal(deal) { const value = deal.toObject(); if (value.status === 'Completed') value.status = 'Released'; return { ...value, thirdPartyInvite: `/join/${value.code}/third_party` }; }
+// Register network-aware routes before the legacy TRC20-only handlers below.
+// Older app clients that omit cryptoChain continue to default safely to TRC20.
+app.post('/api/deals', requireDatabase, auth, async (req, res) => {
+  const { title, description, amount, currency, creatorRole, feePayer, depositRole, automation = 'manual' } = req.body || {};
+  const cryptoChain = req.body?.cryptoChain || 'TRC20';
+  const inspectionHours = Number(req.body?.inspectionHours || 48);
+  if (!title || !description || !Number(amount) || !['USDT', 'KES'].includes(currency) || (currency === 'USDT' && !['TRC20', 'BEP20'].includes(cryptoChain)) || !['buyer', 'seller'].includes(creatorRole) || !['buyer', 'seller'].includes(depositRole) || !['buyer', 'seller', 'both'].includes(feePayer) || !['manual', 'bot'].includes(automation) || ![24, 48, 168].includes(inspectionHours)) return res.status(400).json({ error: 'Complete every deal field and choose a supported crypto network.' });
+  let dealCode = code(); while (await Deal.exists({ code: dealCode })) dealCode = code();
+  const deal = await Deal.create({ code: dealCode, title, description, amount: Number(amount), currency, cryptoChain: currency === 'USDT' ? cryptoChain : undefined, automation, inspectionHours, depositRole: automation === 'bot' ? 'buyer' : depositRole, fee: feeFor(Number(amount), currency, feePayer), creator: req.user.id, parties: [{ user: req.user.id, name: req.user.name, role: creatorRole }] });
+  if (automation === 'bot') await botMessage(deal, `🤖 Welcome to Automated XCROW Bot.\n🔑 Share code ${deal.code} with the other party.\n📋 Deal: ${deal.title}.\n⏱️ Review window: ${inspectionHours} hours.\n✨ Type /help for useful prompts.`);
+  res.status(201).json(publicDeal(deal));
+});
+app.post('/api/deals/:id/checkout', requireDatabase, auth, async (req, res) => {
+  try {
+    const deal = await Deal.findById(req.params.id);
+    if (!deal || !isMember(deal, req.user.id)) return res.status(404).json({ error: 'Escrow not found.' });
+    if (deal.status !== 'Ready to deposit') return res.status(409).json({ error: 'Both buyer and seller must confirm readiness before a deposit can start.' });
+    if (myRole(deal, req.user.id) !== deal.depositRole) return res.status(403).json({ error: `The ${deal.depositRole} starts this deposit.` });
+    const total = deal.fee.buyerTotal;
+    if (deal.currency === 'KES') {
+      if (!process.env.HASHPAY_ACCOUNT_ID || !process.env.HASHPAY_API_KEY) return res.status(503).json({ error: 'HashPay KES account settings are missing on this service.' });
+      const payer = await User.findById(req.user.id); const phone = payer?.profile?.mpesaNumber || '';
+      if (!phone) return res.status(422).json({ error: 'Save your M-Pesa number in Profile settings before starting a deposit.' });
+      const reference = `XCROW-${deal.code}-${Date.now()}`; const stk = await sendStk({ amount: total, phone, reference });
+      deal.payments.push({ method: 'KES_STK', amount: total, status: 'pending', reference, checkoutId: stk.checkout_id }); deal.status = 'Deposit prompt sent'; await deal.save();
+      return res.json({ provider: 'xcrow-stk', amount: total, reference });
+    }
+    if (!hashpay) return res.status(503).json({ error: 'HashPay crypto credentials are not configured on this service.' });
+    const chain = deal.cryptoChain || 'TRC20'; const network = chain === 'BEP20' ? 'bsc' : 'tron';
+    const invoice = await hashpay.createInvoice({ amount: String(total), settlementCurrency: 'USD', tokenSymbol: 'USDT', network });
+    deal.payments.push({ invoiceId: invoice.id, checkoutUrl: invoice.checkoutUrl, method: `USDT_${chain}`, chain, amount: total, status: 'pending' }); deal.status = 'Checkout opened'; await deal.save();
+    return res.json({ provider: 'hashpay-crypto', cryptoChain: chain, checkoutUrl: invoice.checkoutUrl, invoiceId: invoice.id, walletAddress: invoice.walletAddress });
+  } catch (error) { console.error('Checkout creation failed:', error.message); res.status(502).json({ error: error.message || 'Could not send the deposit prompt.' }); }
+});
+app.get('/api/payment-info', (_req, res) => res.json({ usdtAddress, usdtBep20Address }));
+app.post('/api/deals/:id/usdt-pending', requireDatabase, auth, async (req, res) => {
+  const deal = await Deal.findById(req.params.id); const chain = deal?.cryptoChain || 'TRC20'; const method = `USDT_${chain}`; const awaiting = `Awaiting ${chain} confirmation`;
+  if (!deal || myRole(deal, req.user.id) !== deal.depositRole || deal.currency !== 'USDT') return res.status(403).json({ error: 'This crypto confirmation request is not available.' });
+  if (!['Ready to deposit', awaiting].includes(deal.status)) return res.status(409).json({ error: 'This escrow is not ready for a crypto confirmation request.' });
+  if (!deal.payments.some(item => item.method === method && item.status === 'pending')) deal.payments.push({ method, chain, amount: deal.fee.buyerTotal, status: 'pending', reference: `XCROW-${deal.code}-${chain}` });
+  deal.status = awaiting; await deal.save(); res.json(publicDeal(deal));
+});
+app.post('/api/deals/code/:code/usdt-pending', requireDatabase, auth, async (req, res) => {
+  const deal = await Deal.findOne({ code: String(req.params.code || '').toUpperCase() }); const chain = deal?.cryptoChain || 'TRC20'; const method = `USDT_${chain}`; const awaiting = `Awaiting ${chain} confirmation`;
+  if (!deal || myRole(deal, req.user.id) !== deal.depositRole || deal.currency !== 'USDT') return res.status(403).json({ error: 'This crypto confirmation request is not available.' });
+  if (!['Ready to deposit', awaiting].includes(deal.status)) return res.status(409).json({ error: 'This escrow is not ready for a crypto confirmation request.' });
+  if (!deal.payments.some(item => item.method === method && item.status === 'pending')) deal.payments.push({ method, chain, amount: deal.fee.buyerTotal, status: 'pending', reference: `XCROW-${deal.code}-${chain}` });
+  deal.status = awaiting; await deal.save(); res.json(publicDeal(deal));
+});
+app.get('/api/admin/summary', requireDatabase, auth, admin, async (_req, res) => {
+  const [users, escrows, active, cryptoPending, allDeals, members, actions] = await Promise.all([
+    User.countDocuments(), Deal.countDocuments(),
+    Deal.countDocuments({ status: { $in: ['Funded','Ready to deposit','Awaiting TRC20 confirmation','Awaiting BEP20 confirmation','Deposit prompt sent','Refund processing','Support review requested','Dispute review'] } }),
+    Deal.find({ 'payments.method': { $in: ['USDT_TRC20','USDT_BEP20'] }, 'payments.status': 'pending' }).sort({ updatedAt: -1 }),
+    Deal.find().sort({ updatedAt: -1 }).limit(250), User.find().select('name email createdAt').sort({ createdAt: -1 }).limit(500), AdminAction.find().sort({ createdAt: -1 }).limit(100)
+  ]);
+  const emailMap = new Map(members.map(member => [String(member.id), member.email]));
+  const pending = cryptoPending.map(deal => adminDeal(deal, emailMap));
+  res.json({ users, escrows, active, members: members.map(member => ({ id: member.id, name: member.name, email: member.email, joinedAt: member.createdAt })), allEscrows: allDeals.map(deal => adminDeal(deal, emailMap)), cryptoPending: pending, trc20Pending: pending, actions });
+});
+app.get('/api/admin/portal', requireDatabase, auth, admin, async (_req, res) => {
+  const [members, deals, actions] = await Promise.all([User.find().select('name email createdAt').sort({ createdAt: -1 }).limit(500), Deal.find().sort({ updatedAt: -1 }).limit(250), AdminAction.find().sort({ createdAt: -1 }).limit(100)]);
+  const emailMap = new Map(members.map(member => [String(member.id), member.email])); const escrows = deals.map(deal => adminDeal(deal, emailMap));
+  const pending = escrows.filter(deal => deal.payments.some(payment => ['USDT_TRC20','USDT_BEP20'].includes(payment.method) && payment.status === 'pending'));
+  const active = escrows.filter(deal => ['Funded','Ready to deposit','Awaiting TRC20 confirmation','Awaiting BEP20 confirmation','Deposit prompt sent','Refund processing','Support review requested','Dispute review'].includes(deal.status)).length;
+  res.json({ counts: { members: members.length, escrows: escrows.length, active, cryptoPending: pending.length, trc20Pending: pending.length }, members: members.map(member => ({ id: member.id, name: member.name, email: member.email, joinedAt: member.createdAt })), escrows, cryptoPending: pending, trc20Pending: pending, actions });
+});
+for (const route of ['mark-crypto-funded', 'confirm-trc20']) app.post(`/api/admin/deals/:id/${route}`, requireDatabase, auth, admin, async (req, res) => {
+  const deal = await Deal.findById(req.params.id); if (!deal || deal.currency !== 'USDT') return res.status(404).json({ error: 'USDT escrow not found.' });
+  const chain = deal.cryptoChain || 'TRC20'; let payment = deal.payments.find(item => item.method === `USDT_${chain}` && item.status === 'pending');
+  if (!payment && route === 'confirm-trc20') return res.status(404).json({ error: `No pending ${chain} payment was found.` });
+  if (!payment) { deal.payments.push({ method: `USDT_${chain}`, chain, amount: deal.fee.buyerTotal, status: 'pending', reference: `XCROW-${deal.code}-${chain}` }); payment = deal.payments.at(-1); }
+  payment.status = 'paid'; payment.paidAt = new Date(); payment.reference = String(req.body?.transactionHash || '').trim() || payment.reference; deal.status = 'Funded'; await deal.save();
+  if (deal.automation === 'bot') await botMessage(deal, `🤖 Deposit verified and securely locked. ${partyName(deal, 'seller')}, you may now proceed with “${deal.title}”. ${partyName(deal, 'buyer')}, use Release only after you have received and checked the agreed item or service.`);
+  await AdminAction.create({ admin: req.adminUser.id, deal: deal.id, action: 'Funded', note: `Escrow ${deal.code}` }); res.json(publicDeal(deal));
+});
 async function closeEscrow(deal, reason, finalStatus = '') {
   deal.status = 'Closed';
   deal.closeReason = reason;
