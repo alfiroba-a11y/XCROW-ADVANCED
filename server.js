@@ -24,6 +24,7 @@ const User = mongoose.model('User', new mongoose.Schema({ name: { type: String, 
 const Deal = mongoose.model('Deal', new mongoose.Schema({ code: { type: String, unique: true, required: true }, title: String, description: String, amount: Number, currency: { type: String, enum: ['USDT', 'KES'] }, cryptoChain: { type: String, enum: ['TRC20', 'BEP20'], default: 'TRC20' }, automation: { type: String, enum: ['manual', 'bot'], default: 'manual' }, depositRole: { type: String, enum: ['buyer', 'seller'], default: 'buyer' }, inspectionHours: { type: Number, enum: [24, 48, 168], default: 48 }, deliverySubmittedAt: Date, deliveryNote: { type: String, default: '' }, fee: { payer: String, amount: Number, sourceKes: Number, rate: Number, buyerTotal: Number, sellerReceives: Number }, creator: mongoose.Schema.Types.ObjectId, parties: [{ user: mongoose.Schema.Types.ObjectId, name: String, role: { type: String, enum: ['buyer', 'seller', 'third_party'] } }], readyBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], botConfirmedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], refundAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], pauseAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], resumeAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], cancelAgreedBy: [{ user: mongoose.Schema.Types.ObjectId, role: String, at: Date }], pausedFrom: String, releaseRequestedAt: Date, completedAt: Date, completedBy: mongoose.Schema.Types.ObjectId, settledAmount: Number, settledToName: String, settledToRole: String, settlementType: String, closedAt: Date, closeReason: String, finalStatus: String, appealedAt: Date, status: { type: String, default: 'Awaiting participants' }, payments: [{ invoiceId: String, checkoutId: String, checkoutUrl: String, method: String, amount: Number, chain: { type: String, enum: ['TRC20', 'BEP20'] }, status: { type: String, default: 'pending' }, paidAt: Date, reference: String }] }, { timestamps: true }));
 const Message = mongoose.model('Message', new mongoose.Schema({ deal: { type: mongoose.Schema.Types.ObjectId, ref: 'Deal', required: true }, sender: mongoose.Schema.Types.ObjectId, senderName: String, body: { type: String, required: true, trim: true, maxlength: 1500 } }, { timestamps: true }));
 const AdminAction = mongoose.model('AdminAction', new mongoose.Schema({ admin: mongoose.Schema.Types.ObjectId, deal: mongoose.Schema.Types.ObjectId, action: String, note: String }, { timestamps: true }));
+const PlatformSettings = mongoose.model('PlatformSettings', new mongoose.Schema({ key: { type: String, unique: true, default: 'global' }, mpesaPaused: { type: Boolean, default: false }, updatedBy: mongoose.Schema.Types.ObjectId }, { timestamps: true }));
 const DealFeedback = mongoose.model('DealFeedback', new mongoose.Schema({ deal: { type: mongoose.Schema.Types.ObjectId, ref: 'Deal', required: true }, user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, rating: { type: Number, required: true, min: 1, max: 5 }, comment: { type: String, trim: true, maxlength: 600, default: '' } }, { timestamps: true }));
 const SupportTicket = mongoose.model('SupportTicket', new mongoose.Schema({ user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, guestId: { type: String, unique: true, sparse: true }, userName: String, email: String, code: { type: String, unique: true, sparse: true }, category: { type: String, default: 'General' }, priority: { type: String, default: 'normal' }, messages: [{ sender: String, body: String, at: Date }], status: { type: String, enum: ['open', 'resolved'], default: 'open' } }, { timestamps: true }));
 // Inspection duration is stored as total hours for compatibility with existing
@@ -143,6 +144,16 @@ function hasLiveSupport(deal) { return Boolean(deal?.parties?.some(party => ['XC
 function myRole(deal, id) { return deal.parties.find(p => String(p.user) === id)?.role; }
 function code() { return Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[crypto.randomInt(24)]).join(''); }
 function publicDeal(deal) { const value = deal.toObject(); if (value.status === 'Completed') value.status = 'Released'; return { ...value, thirdPartyInvite: `/join/${value.code}/third_party` }; }
+const mpesaMaintenanceMessage = 'M-Pesa payments are currently under maintenance. Contact support for more information, or choose USDT cryptocurrency payments.';
+async function isMpesaPaused() { const settings = await PlatformSettings.findOne({ key: 'global' }).select('mpesaPaused').lean(); return settings?.mpesaPaused === true; }
+app.get('/api/payment-status', requireDatabase, async (_req, res) => { res.json({ mpesaPaused: await isMpesaPaused() }); });
+app.get('/api/admin/settings/mpesa', requireDatabase, auth, admin, async (_req, res) => { res.json({ mpesaPaused: await isMpesaPaused() }); });
+app.put('/api/admin/settings/mpesa', requireDatabase, auth, admin, async (req, res) => {
+  if (typeof req.body?.paused !== 'boolean') return res.status(400).json({ error: 'Choose whether M-Pesa payments should be paused.' });
+  const settings = await PlatformSettings.findOneAndUpdate({ key: 'global' }, { $set: { mpesaPaused: req.body.paused, updatedBy: req.adminUser.id } }, { new: true, upsert: true, setDefaultsOnInsert: true });
+  await AdminAction.create({ admin: req.adminUser.id, action: settings.mpesaPaused ? 'M-Pesa paused' : 'M-Pesa resumed', note: 'Payment operations setting' });
+  res.json({ mpesaPaused: settings.mpesaPaused });
+});
 // Register network-aware routes before the legacy TRC20-only handlers below.
 // Older app clients that omit cryptoChain continue to default safely to TRC20.
 app.post('/api/deals', requireDatabase, auth, async (req, res) => {
@@ -165,19 +176,20 @@ app.post('/api/deals/:id/checkout', requireDatabase, auth, async (req, res) => {
     if (myRole(deal, req.user.id) !== deal.depositRole) return res.status(403).json({ error: `The ${deal.depositRole} starts this deposit.` });
     const total = deal.fee.buyerTotal;
     if (deal.currency === 'KES') {
-      if (!process.env.HASHPAY_ACCOUNT_ID || !process.env.HASHPAY_API_KEY) return res.status(503).json({ error: 'HashPay KES account settings are missing on this service.' });
+      if (await isMpesaPaused()) return res.status(503).json({ error: mpesaMaintenanceMessage });
+      if (!process.env.HASHPAY_ACCOUNT_ID || !process.env.HASHPAY_API_KEY) return res.status(503).json({ error: 'M-Pesa payments are temporarily unavailable. Contact XCROW support or choose USDT cryptocurrency payments.' });
       const payer = await User.findById(req.user.id); const phone = payer?.profile?.mpesaNumber || '';
       if (!phone) return res.status(422).json({ error: 'Save your M-Pesa number in Profile settings before starting a deposit.' });
       const reference = `XCROW-${deal.code}-${Date.now()}`; const stk = await sendStk({ amount: total, phone, reference });
       deal.payments.push({ method: 'KES_STK', amount: total, status: 'pending', reference, checkoutId: stk.checkout_id }); deal.status = 'Deposit prompt sent'; await deal.save();
       return res.json({ provider: 'xcrow-stk', amount: total, reference });
     }
-    if (!hashpay) return res.status(503).json({ error: 'HashPay crypto credentials are not configured on this service.' });
+    if (!hashpay) return res.status(503).json({ error: 'Crypto checkout is temporarily unavailable. Please contact XCROW support.' });
     const chain = deal.cryptoChain || 'TRC20'; const network = chain === 'BEP20' ? 'bsc' : 'tron';
     const invoice = await hashpay.createInvoice({ amount: String(total), settlementCurrency: 'USD', tokenSymbol: 'USDT', network });
     deal.payments.push({ invoiceId: invoice.id, checkoutUrl: invoice.checkoutUrl, method: `USDT_${chain}`, chain, amount: total, status: 'pending' }); deal.status = 'Checkout opened'; await deal.save();
-    return res.json({ provider: 'hashpay-crypto', cryptoChain: chain, checkoutUrl: invoice.checkoutUrl, invoiceId: invoice.id, walletAddress: invoice.walletAddress });
-  } catch (error) { console.error('Checkout creation failed:', error.message); res.status(502).json({ error: error.message || 'Could not send the deposit prompt.' }); }
+    return res.json({ provider: 'xcrow-crypto', cryptoChain: chain, checkoutUrl: invoice.checkoutUrl, invoiceId: invoice.id, walletAddress: invoice.walletAddress });
+  } catch (error) { console.error('Checkout creation failed:', error.message); res.status(502).json({ error: error.message === mpesaMaintenanceMessage ? mpesaMaintenanceMessage : 'Payment could not be started. Contact XCROW support or try again later.' }); }
 });
 app.get('/api/payment-info', (_req, res) => res.json({ usdtAddress, usdtBep20Address }));
 app.post('/api/deals/:id/usdt-pending', requireDatabase, auth, async (req, res) => {
@@ -206,11 +218,11 @@ app.get('/api/admin/summary', requireDatabase, auth, admin, async (_req, res) =>
   res.json({ users, escrows, active, members: members.map(member => ({ id: member.id, name: member.name, email: member.email, joinedAt: member.createdAt })), allEscrows: allDeals.map(deal => adminDeal(deal, emailMap)), cryptoPending: pending, trc20Pending: pending, actions });
 });
 app.get('/api/admin/portal', requireDatabase, auth, admin, async (_req, res) => {
-  const [members, deals, actions] = await Promise.all([User.find().select('name email createdAt').sort({ createdAt: -1 }).limit(500), Deal.find().sort({ updatedAt: -1 }).limit(250), AdminAction.find().sort({ createdAt: -1 }).limit(100)]);
+  const [members, deals, actions, settings] = await Promise.all([User.find().select('name email createdAt').sort({ createdAt: -1 }).limit(500), Deal.find().sort({ updatedAt: -1 }).limit(250), AdminAction.find().sort({ createdAt: -1 }).limit(100), PlatformSettings.findOne({ key: 'global' }).select('mpesaPaused').lean()]);
   const emailMap = new Map(members.map(member => [String(member.id), member.email])); const escrows = deals.map(deal => adminDeal(deal, emailMap));
   const pending = escrows.filter(deal => deal.payments.some(payment => ['USDT_TRC20','USDT_BEP20'].includes(payment.method) && payment.status === 'pending'));
   const active = escrows.filter(deal => ['Funded','Ready to deposit','Awaiting TRC20 confirmation','Awaiting BEP20 confirmation','Deposit prompt sent','Refund processing','Support review requested','Dispute review'].includes(deal.status)).length;
-  res.json({ counts: { members: members.length, escrows: escrows.length, active, cryptoPending: pending.length, trc20Pending: pending.length }, members: members.map(member => ({ id: member.id, name: member.name, email: member.email, joinedAt: member.createdAt })), escrows, cryptoPending: pending, trc20Pending: pending, actions });
+  res.json({ counts: { members: members.length, escrows: escrows.length, active, cryptoPending: pending.length, trc20Pending: pending.length }, mpesaPaused: settings?.mpesaPaused === true, members: members.map(member => ({ id: member.id, name: member.name, email: member.email, joinedAt: member.createdAt })), escrows, cryptoPending: pending, trc20Pending: pending, actions });
 });
 for (const route of ['mark-crypto-funded', 'confirm-trc20']) app.post(`/api/admin/deals/:id/${route}`, requireDatabase, auth, admin, async (req, res) => {
   const deal = await Deal.findById(req.params.id); if (!deal || deal.currency !== 'USDT') return res.status(404).json({ error: 'USDT escrow not found.' });
@@ -332,6 +344,8 @@ function feeInKes(amountKes) { if (amountKes < 2000) return 0; if (amountKes < 8
 function feeFor(amount, currency, payer) { const rate = Number(process.env.USD_KES_RATE || 130); const sourceKes = feeInKes(currency === 'USDT' ? amount * rate : amount); const fee = currency === 'USDT' ? Number((sourceKes / rate).toFixed(2)) : sourceKes; return { payer, amount: fee, sourceKes, rate, buyerTotal: Number((amount + (payer === 'buyer' ? fee : payer === 'both' ? fee / 2 : 0)).toFixed(2)), sellerReceives: Number((amount - (payer === 'seller' ? fee : payer === 'both' ? fee / 2 : 0)).toFixed(2)) }; }
 function normalizeMpesaNumber(value) { const digits = String(value || '').replace(/\D/g, ''); if (/^0[17]\d{8}$/.test(digits)) return `254${digits.slice(1)}`; if (/^[17]\d{8}$/.test(digits)) return `254${digits}`; if (/^254[17]\d{8}$/.test(digits)) return digits; return ''; }
 async function sendStk({ amount, phone, reference }) { const msisdn = normalizeMpesaNumber(phone); if (!msisdn) throw new Error('Save a valid Kenyan M-Pesa number in Wallet, for example 0712345678.'); const response = await fetch('https://api.hashback.co.ke/initiatestk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: process.env.HASHPAY_API_KEY, account_id: process.env.HASHPAY_ACCOUNT_ID, amount: String(amount), msisdn, reference, callback_webhook: hashbackWebhookUrl }) }); const data = await response.json().catch(() => ({})); const accepted = data.success === true || data.success === 'true' || Number(data.ResponseCode) === 0 || String(data.status || '').toLowerCase() === 'success'; if (!response.ok || !accepted) { console.error('HashPay STK rejected', { reference, status: response.status, message: data.message || data.ResponseDescription || 'No provider message' }); throw new Error(data.message || data.ResponseDescription || 'HashPay did not accept the STK request. Check your HashPay account settings.'); } console.info('HashPay STK accepted', { reference, status: response.status, checkoutId: data.checkout_id || data.CheckoutRequestID || null, webhook: hashbackWebhookUrl }); return data; }
+const sendStkProvider = sendStk;
+sendStk = async input => { if (await isMpesaPaused()) throw new Error(mpesaMaintenanceMessage); try { return await sendStkProvider(input); } catch (error) { if (error.message === mpesaMaintenanceMessage) throw error; throw new Error('M-Pesa prompt could not be sent. Contact XCROW support or try again later.'); } };
 async function reconcilePendingStkPayments() {
   if (mongoose.connection.readyState !== 1 || !process.env.HASHPAY_API_KEY || !process.env.HASHPAY_ACCOUNT_ID) return;
   const deals = await Deal.find({ status: { $in: ['Deposit prompt sent', 'Deposit prompt resent'] }, payments: { $elemMatch: { method: 'KES_STK', status: 'pending', checkoutId: { $exists: true, $ne: '' } } } }).limit(20);
