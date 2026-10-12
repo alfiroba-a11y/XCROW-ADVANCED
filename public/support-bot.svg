@@ -1,1 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="XCROW Support bot"><defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs><circle cx="64" cy="64" r="60" fill="url(#g)"/><path fill="#fff" d="M37 52a27 27 0 0 1 54 0v27a20 20 0 0 1-20 20H57a20 20 0 0 1-20-20z"/><path fill="#bfdbfe" d="M32 60h8v23h-8a8 8 0 0 1-8-8v-7a8 8 0 0 1 8-8m64 0h8a8 8 0 0 1 8 8v7a8 8 0 0 1-8 8h-8z"/><circle cx="54" cy="70" r="5" fill="#12213a"/><circle cx="74" cy="70" r="5" fill="#12213a"/><path d="M52 84c7 5 17 5 24 0" fill="none" stroke="#12213a" stroke-width="4" stroke-linecap="round"/><path d="M64 31v10" stroke="#fff" stroke-width="5" stroke-linecap="round"/><circle cx="64" cy="26" r="5" fill="#facc15"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="XCROW human support agent wearing a headset">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#06b6d4"/></linearGradient>
+    <linearGradient id="shirt" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f8fbff"/><stop offset="1" stop-color="#dbeafe"/></linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="62" fill="url(#bg)"/>
+  <path d="M20 122c3-22 19-34 44-34s41 12 44 34" fill="url(#shirt)"/>
+  <path d="M54 80h20v16c-5 7-15 7-20 0z" fill="#d99473"/>
+  <path d="M38 50c0-20 11-31 27-31s27 11 27 31v15c0 19-12 31-28 31S38 84 38 65z" fill="#f2b995"/>
+  <path d="M37 56c-4-22 7-41 29-41 20 0 31 14 28 38-5-2-9-8-11-14-11 7-24 10-40 9v8z" fill="#17304f"/>
+  <path d="M48 62c3-2 7-2 10 0m13 0c3-2 7-2 10 0" fill="none" stroke="#17304f" stroke-width="3" stroke-linecap="round"/>
+  <path d="M59 76c4 3 10 3 14 0" fill="none" stroke="#a5534b" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M32 62V55a32 32 0 0 1 64 0v7" fill="none" stroke="#e8f4ff" stroke-width="7" stroke-linecap="round"/>
+  <rect x="25" y="57" width="15" height="27" rx="7" fill="#e8f4ff" stroke="#17304f" stroke-width="3"/>
+  <rect x="88" y="57" width="15" height="27" rx="7" fill="#e8f4ff" stroke="#17304f" stroke-width="3"/>
+  <path d="M95 79c0 9-7 15-17 15h-4" fill="none" stroke="#17304f" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="71" cy="94" r="4" fill="#22c55e"/>
+</svg>
