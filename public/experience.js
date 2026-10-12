@@ -22,7 +22,7 @@
       ['17','Inactivity safety','Unused setup sessions close after one hour, limiting abandoned deal rooms.'],
       ['18','Feedback loop','Buyer and seller can rate a closed released or refunded escrow experience.'],
       ['19','Live refresh','Open deal rooms refresh their status so participants can see confirmed changes.'],
-      ['20','Human help','XCROW Support is available through live support and xcrowsupport@gmail.com.']
+      ['20','Human help','Contact XCROW Support at support@xcrow.online or use live support.']
     ];
     const section = document.createElement('section');
     section.id = 'xcrow-experience';
