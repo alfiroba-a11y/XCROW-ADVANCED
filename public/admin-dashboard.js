@@ -33,15 +33,29 @@
     supportLoading = true;
     try {
       const tickets = await call('/api/admin/support-tickets');
+      const snapshot = JSON.stringify(tickets);
+      if (host.dataset.snapshot === snapshot) return;
+      const pageScroll = window.scrollY;
+      const chatScroll = new Map([...host.querySelectorAll('[data-ticket-messages]')].map(chat => [chat.dataset.ticketMessages, { top: chat.scrollTop, atBottom: chat.scrollHeight - chat.clientHeight - chat.scrollTop < 32 }]));
+      const replyDrafts = new Map([...host.querySelectorAll('[data-support-reply]')].map(input => [input.dataset.supportReply, input.value]));
       const supportNames = ['XCROW Support', 'Escrow live support'];
       const currentId = String(window.xcrowState?.user?.id || '');
       const activeEscrows = (dashboardData?.escrows || []).filter(deal => !['Closed','Released','Refunded'].includes(deal.status) && deal.parties?.some(person => supportNames.includes(person.name) || (person.role === 'third_party' && currentId && String(person.user) === currentId)));
       const escrowHtml = activeEscrows.length ? activeEscrows.map(deal => `<article class="admin-deal-card"><h4>${esc(deal.code)} · ${esc(deal.title)}</h4><p><span class="status">${esc(deal.status)}</span> · ${esc(deal.parties.map(person => person.name).join(' · '))}</p><div class="admin-actions"><button class="button" data-active-chat="${deal._id}">Open active conversation</button>${deal.status === 'Appeal review' ? `<button class="copy" data-resolve-appeal="${deal._id}">Resolve appeal</button>` : ''}</div></article>`).join('') : '<p class="admin-empty">No active escrow support conversations.</p>';
-      const ticketHtml = tickets.length ? tickets.map(ticket => `<article class="admin-deal-card"><h4>${esc(ticket.code || 'Direct support')} · ${esc(ticket.userName)} <span class="status">Active</span></h4><p>${esc(ticket.email || 'Guest')} · ${esc(ticket.category || 'General')} · ${esc(ticket.priority || 'normal')}</p><div class="chat">${(ticket.messages || []).map(message => `<p><b>${esc(message.sender)}</b><span>${esc(message.body)}</span><small>${new Date(message.at).toLocaleString()}</small></p>`).join('')}</div><textarea data-support-reply="${ticket._id}" maxlength="1500" placeholder="Reply as Escrow live support" style="width:100%;margin:8px 0;padding:10px"></textarea><button class="button" data-support-send="${ticket._id}">Send reply</button><button class="copy" data-support-status="${ticket._id}">Resolve conversation</button></article>`).join('') : '<p class="admin-empty">No active direct support conversations.</p>';
+      const ticketHtml = tickets.length ? tickets.map(ticket => `<article class="admin-deal-card"><h4>${esc(ticket.code || 'Direct support')} · ${esc(ticket.userName)} <span class="status">Active</span></h4><p>${esc(ticket.email || 'Guest')} · ${esc(ticket.category || 'General')} · ${esc(ticket.priority || 'normal')}</p><div class="chat" data-ticket-messages="${ticket._id}" style="max-height:320px;overflow:auto">${(ticket.messages || []).map(message => `<p><b>${esc(message.sender)}</b><span>${esc(message.body)}</span><small>${new Date(message.at).toLocaleString()}</small></p>`).join('')}</div><textarea data-support-reply="${ticket._id}" maxlength="1500" placeholder="Reply as Escrow live support" style="width:100%;margin:8px 0;padding:10px"></textarea><button class="button" data-support-send="${ticket._id}">Send reply</button><button class="copy" data-support-status="${ticket._id}">Resolve conversation</button></article>`).join('') : '<p class="admin-empty">No active direct support conversations.</p>';
       host.innerHTML = `<h3>Active escrow conversations</h3>${escrowHtml}<h3 style="margin-top:24px">Active direct support conversations</h3>${ticketHtml}`;
+      host.dataset.snapshot = snapshot;
+      host.querySelectorAll('[data-ticket-messages]').forEach(chat => {
+        const prior = chatScroll.get(chat.dataset.ticketMessages);
+        if (prior) chat.scrollTop = prior.atBottom ? chat.scrollHeight : prior.top;
+      });
+      host.querySelectorAll('[data-support-reply]').forEach(input => {
+        if (replyDrafts.has(input.dataset.supportReply)) input.value = replyDrafts.get(input.dataset.supportReply);
+      });
+      window.scrollTo(0, pageScroll);
       host.querySelectorAll('[data-active-chat]').forEach(button => button.onclick = () => openGroupChat(button.dataset.activeChat));
       host.querySelectorAll('[data-resolve-appeal]').forEach(button => button.onclick = async () => { button.disabled = true; try { await call(`/api/admin/deals/${button.dataset.resolveAppeal}/resolve-appeal`, { method:'POST' }); await load(); } catch (error) { alert(error.message); button.disabled = false; } });
-      host.querySelectorAll('[data-support-send]').forEach(button => button.onclick = async () => { const body = host.querySelector(`[data-support-reply="${button.dataset.supportSend}"]`).value.trim(); if (!body) return alert('Write a reply first.'); button.disabled = true; try { await call(`/api/admin/support-tickets/${button.dataset.supportSend}/reply`, { method:'POST', body:JSON.stringify({ body }) }); await loadSupportTickets(); } catch (error) { alert(error.message); } finally { button.disabled = false; } });
+      host.querySelectorAll('[data-support-send]').forEach(button => button.onclick = async () => { const input = host.querySelector(`[data-support-reply="${button.dataset.supportSend}"]`); const body = input.value.trim(); if (!body) return alert('Write a reply first.'); button.disabled = true; try { await call(`/api/admin/support-tickets/${button.dataset.supportSend}/reply`, { method:'POST', body:JSON.stringify({ body }) }); input.value = ''; await loadSupportTickets(); } catch (error) { alert(error.message); } finally { button.disabled = false; } });
       host.querySelectorAll('[data-support-status]').forEach(button => button.onclick = async () => { try { await call(`/api/admin/support-tickets/${button.dataset.supportStatus}/status`, { method:'PATCH', body:JSON.stringify({ status:'resolved' }) }); await loadSupportTickets(); } catch (error) { alert(error.message); } });
     } catch (error) { host.textContent = error.message; } finally { supportLoading = false; }
   }  function controls(deal) { const closed = deal.status === 'Closed'; const canFund = !closed && !['Funded','Release processing','Refund processing','Released','Refunded'].includes(deal.status); return `<div class="admin-actions">${deal.currency === 'USDT' && canFund ? `<button class="button" data-mark="${deal._id}">✔ Mark funded</button>` : ''}${deal.currency === 'KES' && canFund ? `<button class="button" data-mpesa="${deal._id}">✔ Mark M-Pesa received</button>` : ''}${deal.status === 'Release processing' ? `<button class="button" data-complete="${deal._id}">🔐 Release funds</button>` : ''}${deal.status === 'Refund processing' ? `<button class="button" data-complete-refund="${deal._id}">↩ Complete refund</button>` : ''}${closed ? `<small style="color:#b91c1c;font-weight:700">Escrow session closed</small>` : `<button class="copy" data-support="${deal._id}">🛡️ Add support</button><button class="copy" data-dispute="${deal._id}">⚖️ Dispute review</button><button class="button" data-chat="${deal._id}">🎧 Open group chat</button>`}</div>`; }
@@ -59,10 +73,19 @@
       dialog.innerHTML = `<form class="modal" style="width:min(650px,calc(100vw - 28px))"><button class="close" type="button">×</button><span class="tag">🎧 ESCROW LIVE SUPPORT · ${esc(deal.code)}</span><h2>${esc(deal.title)}</h2><p class="detail-meta">Active escrow conversation · ${esc(deal.status)}</p><div id="admin-group-messages" class="chat" style="max-height:340px;overflow:auto"></div><input name="body" maxlength="1500" placeholder="Message this escrow group as Escrow live support" required style="width:100%;margin:12px 0;padding:10px"><small class="message" aria-live="polite"></small><button class="button" type="submit">Send message</button></form>`;
       document.body.append(dialog); dialog.showModal();
       const box = dialog.querySelector('#admin-group-messages');
-      const renderMessages = entries => { box.innerHTML = entries.map(message => `<p><b>${esc(message.senderName)}</b><span>${esc(message.body)}</span><small>${new Date(message.createdAt).toLocaleString()}</small></p>`).join('') || '<small>No messages yet.</small>'; box.scrollTop = box.scrollHeight; };
+      let messageSnapshot = '';
+      const renderMessages = entries => {
+        const snapshot = JSON.stringify(entries);
+        if (snapshot === messageSnapshot) return;
+        const wasAtBottom = box.scrollHeight - box.clientHeight - box.scrollTop < 32;
+        const previousTop = box.scrollTop;
+        box.innerHTML = entries.map(message => `<p><b>${esc(message.senderName)}</b><span>${esc(message.body)}</span><small>${new Date(message.createdAt).toLocaleString()}</small></p>`).join('') || '<small>No messages yet.</small>';
+        box.scrollTop = wasAtBottom ? box.scrollHeight : previousTop;
+        messageSnapshot = snapshot;
+      };
       const refresh = async () => { try { const messages = await call(`/api/deals/${id}/messages`); if (dialog.open) renderMessages(messages); } catch (error) { const status = dialog.querySelector('.message'); if (status) status.textContent = `Could not refresh this conversation: ${error.message}`; } };
       renderMessages(await call(`/api/deals/${id}/messages`));
-      const timer = setInterval(refresh, 2500);
+      const timer = setInterval(refresh, 6000);
       const close = () => { clearInterval(timer); dialog.close(); dialog.remove(); };
       dialog.querySelector('.close').onclick = close; dialog.addEventListener('close', () => clearInterval(timer), { once:true });
       dialog.querySelector('form').onsubmit = async event => { event.preventDefault(); const form=event.currentTarget; const input=form.elements.body; const send=form.querySelector('[type="submit"]'); const body=String(input.value||'').trim(); if (!body || send.disabled) return; send.disabled=true; send.textContent='Sending…'; try { await call(`/api/deals/${id}/messages`, { method:'POST', body:JSON.stringify({ body }) }); input.value=''; form.querySelector('.message').textContent='Message sent.'; await refresh(); } catch (error) { form.querySelector('.message').textContent=error.message; } finally { send.disabled=false; send.textContent='Send message'; } };
@@ -85,7 +108,7 @@
     finally { delete host.dataset.mpesaControlLoading; }
   }
   setInterval(() => { if (location.hash === '#admin' && window.xcrowState?.user?.admin) { if (!document.querySelector('#admin-view')?.dataset.structured) showStructuredAdmin(); ensureMpesaControl(); } }, 2500);
-  setInterval(() => { if (location.hash === '#admin' && selectedTab === 'support' && !panel()?.querySelector('#support-inbox textarea:focus')) load(); }, 7000);
+  setInterval(() => { if (location.hash === '#admin' && selectedTab === 'support') loadSupportTickets(); }, 8000);
   // Do not observe the entire document. Settlement updates change many DOM
   // nodes and a global observer can recursively reload the admin dashboard.
 })();

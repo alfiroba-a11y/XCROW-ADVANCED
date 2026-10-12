@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="XCROW is a trusted online escrow service for buyers, sellers and freelancers in Kenya. Build confidence with clear deal terms, visible payment status, delivery updates, and a shared transaction record. KES and USDT options.">
+  <meta name="description" content="XCROW is a secure, trusted escrow platform for buyers, sellers and freelancers in Kenya. Track clear deal terms and payment status. Support: support@xcrow.online.">
   <meta name="robots" content="index,follow,max-image-preview:large">
   <meta name="theme-color" content="#ffffff">
   <link rel="canonical" href="https://xcrow.online/">
@@ -12,14 +12,14 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="XCROW">
   <meta property="og:url" content="https://xcrow.online/">
-  <meta property="og:title" content="XCROW — Trusted Online Escrow for Kenya">
-  <meta property="og:description" content="Build confidence with clear deal terms, visible payment status, delivery updates, and a shared transaction record. KES and USDT (TRC20 or BEP20) payment options.">
+  <meta property="og:title" content="XCROW — Trusted Escrow Platform in Kenya">
+  <meta property="og:description" content="A secure escrow platform for buyers, sellers and freelancers in Kenya. Clear deal terms, visible payment status, and support@xcrow.online.">
   <meta property="og:image" content="https://xcrow.online/xcrow-logo-transparent.png">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="XCROW — Trusted Online Escrow for Kenya">
-  <meta name="twitter:description" content="Build confidence with clear deal terms, visible payment status, delivery updates, and a shared transaction record. KES and USDT (TRC20 or BEP20) payment options.">
+  <meta name="twitter:title" content="XCROW — Trusted Escrow Platform in Kenya">
+  <meta name="twitter:description" content="A secure escrow platform for buyers, sellers and freelancers in Kenya. Clear deal terms, visible payment status, and support@xcrow.online.">
   <meta name="twitter:image" content="https://xcrow.online/xcrow-logo-transparent.png">
-  <title>XCROW | Trusted Online Escrow for Kenya</title>
+  <title>XCROW | Trusted Escrow Platform in Kenya</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
@@ -36,6 +36,12 @@
         "url": "https://xcrow.online/",
         "logo": "https://xcrow.online/xcrow-logo-transparent.png",
         "description": "An online escrow service for buyers, sellers, and freelancers in Kenya, built around clear transaction terms, visible payment status, delivery updates, support, and shared transaction records. Payment options include Kenyan Shillings and USDT on supported networks.",
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "contactType": "customer support",
+          "email": "support@xcrow.online",
+          "availableLanguage": "English"
+        },
         "areaServed": { "@type": "Country", "name": "Kenya" }
       },
       {
@@ -58,7 +64,7 @@
 <section id="payments" class="payment-strip"><span class="tag">PAYMENT OPTIONS</span><h2>Crypto and local currency.<br><em>Choose what works for you.</em></h2><div class="pay-cards"><div><b>₮</b><h3>USDT · TRC20 or BEP20</h3><p>Choose the supported network shown for your escrow and send USDT only to its matching deposit address.</p></div><div><b>KSh</b><h3>Kenyan shilling</h3><p>Pay in KES through the payment instructions shown inside your escrow.</p></div></div></section>
 <section class="cta"><h2>One deal room.<br><em>Everyone aligned.</em></h2><button class="button light" data-modal="signup">Get started <i>↗</i></button></section>
 </main>
-<footer><a class="brand" href="/"><b>×</b>XCROW<span>.COM</span></a><span>© 2026 XCROW. Payment history stays with your account.</span></footer>
+<footer><a class="brand" href="/"><b>×</b>XCROW<span>.COM</span></a><span>© 2026 XCROW. Payment history stays with your account.</span><a href="mailto:support@xcrow.online">Support: support@xcrow.online</a></footer>
 <dialog id="signup"><form class="modal auth-form"><button class="close" value="cancel">×</button><span class="tag">CREATE ACCOUNT</span><h2>Join XCROW.</h2><label>Your name<input name="name" required></label><label>Email address<input name="email" type="email" required></label><label>Password<input name="password" type="password" minlength="8" required></label><button class="button full">Create account <i>↗</i></button><p>Already have an account? <a href="#" data-switch="login">Log in</a></p><small class="message"></small></form></dialog>
 <dialog id="login"><form class="modal auth-form"><button class="close" value="cancel">×</button><span class="tag">WELCOME BACK</span><h2>Log in.</h2><label>Email address<input name="email" type="email" required></label><label>Password<input name="password" type="password" required></label><button class="button full">Log in <i>↗</i></button><button class="copy full" type="button" id="passkey-login">🔐 Sign in with passkey</button><button class="google-login full" type="button" id="google-login"><span>G</span>Continue with Google</button><p class="passkey-note">Passkeys use your fingerprint, face recognition, or device screen lock. Google can create your XCROW account automatically.</p><p>New here? <a href="#" data-switch="signup">Create account</a></p><small class="message"></small></form></dialog>
 <section id="app" hidden><aside><a class="brand" href="/"><b>×</b>XCROW<span>.COM</span></a><button class="side active" data-view="history">▣ My escrows</button><button class="side" data-view="create">＋ Create escrow</button><div class="side-bottom"><span>Signed in as</span><strong id="side-name"></strong><button id="side-logout">Log out</button></div></aside><div class="workspace"><div id="history-view" class="view"><div class="view-head"><div><span class="tag">ACCOUNT HISTORY</span><h2>Your escrows</h2></div><button class="button" data-view="create">Create escrow <i>＋</i></button></div><div id="deals" class="deal-list"></div></div><div id="create-view" class="view" hidden><button class="back" data-view="history">← Back to history</button><span class="tag">NEW ESCROW</span><h2>Create a shared deal.</h2><form id="create-deal" class="deal-form"><label>What is the payment for?<input name="title" placeholder="e.g. Website ownership transfer" required></label><label>Deal details<textarea name="description" placeholder="Describe what the buyer and seller are agreeing to." required></textarea></label><div class="two"><label>Amount<input id="amount-input" name="amount" type="number" min="1" step="0.01" required></label><label>Payment currency<select id="currency-input" name="currency"><option value="USDT">USDT — choose TRC20 or BEP20</option><option value="KES">Kenyan Shilling — KES</option></select></label></div><label>Who pays the escrow fee?<select id="fee-payer-input" name="feePayer"><option value="buyer">Buyer — added to amount due</option><option value="seller">Seller — deducted from proceeds</option><option value="both">Both — split equally</option></select></label><div id="fee-preview" class="fee-preview">Enter an amount to calculate the escrow fee.</div><label>Your role<select name="creatorRole"><option value="buyer">Buyer</option><option value="seller">Seller</option></select></label><button class="button">Create escrow <i>↗</i></button><small class="message"></small></form></div><div id="deal-view" class="view" hidden></div><div id="join-view" class="view" hidden></div></div></section><dialog id="payment"><form class="modal pay-modal"><button class="close" value="cancel">×</button><span class="tag">FUND ESCROW</span><h2 id="payment-title">Payment details</h2><div id="payment-content"></div></form></dialog><script src="/app.js"></script>
