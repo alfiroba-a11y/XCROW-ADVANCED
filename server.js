@@ -9,7 +9,7 @@ import { HashPayClient, constructWebhookEvent } from '@hashpay.me/sdk';
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server';
 import { OAuth2Client } from 'google-auth-library';
 
-const app = express(); const port = process.env.PORT || 3000; const jwtSecret = process.env.JWT_SECRET; const usdtAddress = 'THESvopuBtMGHnbok39ZUBh2EkV7m4Kwne'; const usdtBep20Address = '0x352b897c40ae74619ed792932a1e561ebcb7331e'; const release = 'xcrow-stable-2026-09-13-9';
+const app = express(); const port = process.env.PORT || 3000; const jwtSecret = process.env.JWT_SECRET; const usdtAddress = 'THESvopuBtMGHnbok39ZUBh2EkV7m4Kwne'; const usdtBep20Address = '0xa76061d3293c2c7af5a840f089d41dafa8402b7c'; const release = 'xcrow-stable-2026-09-13-9';
 const googleClient = new OAuth2Client();
 process.on('unhandledRejection', error => console.error('Unhandled XCROW promise rejection:', error));
 process.on('uncaughtException', error => console.error('Uncaught XCROW error:', error));
