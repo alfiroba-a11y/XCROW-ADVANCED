@@ -48,3 +48,9 @@ Open `/#admin` and use an email in `ADMIN_EMAILS` together with `ADMIN_PASSWORD`
 In your HashBack/HashPay settings, configure the public HTTPS endpoint above and use the webhook secret as `HASHPAY_WEBHOOK_SECRET` on Render. The service responds with success only after validating the signature.
 
 Before operating a real escrow service, complete legal, KYC/AML, sanctions, custody, and payment-provider compliance requirements.
+
+## Maintenance mode and member accounts
+
+From the administrator dashboard (`/#admin` or `/admin`), use the **Site maintenance** control to show visitors a maintenance page with service and support details. The protected admin dashboard remains available at `/admin` so an administrator can turn the mode off. Maintenance state is stored in MongoDB.
+
+In **Registered members**, administrators can disable or re-enable a member account. Disabled accounts cannot sign in and their records remain stored. **Delete data** permanently removes the account, its support conversations, messages, and escrow records after the administrator confirms the member's email. Deletion is blocked while the member has an active escrow; close or settle those escrows first.
