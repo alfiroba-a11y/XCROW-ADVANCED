@@ -31,3 +31,10 @@
 @media(max-width:760px){#member-sidebar{max-width:calc(100vw - 56px);width:min(310px,calc(100vw - 56px));padding:24px 18px 16px}#member-sidebar .brand{margin-bottom:26px}#member-sidebar .side{font-size:14px;min-height:48px;padding:0 14px}#member-sidebar .member-help{margin-top:28px}}
 .nav-icon{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8;height:19px;width:19px;flex:0 0 19px}
 #member-menu-toggle .nav-icon{height:20px;width:20px}
+
+/* Public header keeps account actions visible in the mobile header. */
+header>.public-links{display:flex;gap:23px;margin-left:auto}
+header>.header-actions{align-items:center;display:flex;flex:0 0 auto;margin-left:0}
+#auth-actions,#user-actions{align-items:center;display:flex;gap:8px}
+header>.workspace-label{display:none}
+@media(max-width:700px){header{gap:9px;height:72px;justify-content:space-between;padding:0 15px}header>.public-links{display:none}header>.header-actions{margin-left:auto}#auth-actions,#user-actions{gap:5px}#auth-actions .ghost,#user-actions .ghost{font-size:12px;padding:8px 7px}#auth-actions .button{font-size:12px;padding:9px 11px}}
