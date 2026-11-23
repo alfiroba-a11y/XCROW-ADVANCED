@@ -22,3 +22,10 @@
 .conversation-error{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#9a3412;font-size:12px;margin:8px 0;padding:10px}
 .conversation-error button{margin-left:8px}
 @media(max-width:760px){#app{display:block}#member-sidebar{box-shadow:12px 0 32px #10213d14;inset:0 auto 0 0;max-width:84vw;position:fixed;transform:translateX(-110%);transition:transform .22s ease;width:256px;z-index:120}#member-sidebar.open{transform:translateX(0)}#member-sidebar-backdrop:not([hidden]){background:#0f172a70;display:block;inset:0;position:fixed;z-index:119}.member-mobile-bar{align-items:center;background:#fff;border-bottom:1px solid #e8edf3;display:flex;gap:13px;height:56px;padding:0 16px;position:sticky;top:0;z-index:20}.member-mobile-bar button{background:#fff;border:1px solid #e3eaf2;border-radius:7px;color:#334155;font-size:19px;height:34px;width:38px}.member-mobile-bar span{color:#172033;font-size:13px;font-weight:800;letter-spacing:.03em}.member-mobile-bar b{color:#2563eb;font-size:9px;letter-spacing:.12em;margin-left:7px}.workspace{padding:24px 18px}}
+/* Keep the member drawer stacked and readable on narrow screens. */
+#member-sidebar{align-items:stretch;display:flex;flex-direction:column;overflow-y:auto;width:244px}
+#member-sidebar .member-nav{align-content:start;display:flex;flex-direction:column;gap:5px;margin:0;width:100%}
+#member-sidebar .side{box-sizing:border-box;justify-content:flex-start;min-width:0;text-align:left;white-space:normal;width:100%}
+#member-sidebar .side span{align-items:center;display:inline-flex;flex:0 0 22px;font-size:15px;justify-content:center}
+#member-sidebar .member-help{margin:24px 2px 14px}
+@media(max-width:760px){#member-sidebar{max-width:calc(100vw - 56px);width:min(310px,calc(100vw - 56px));padding:24px 18px 16px}#member-sidebar .brand{margin-bottom:26px}#member-sidebar .side{font-size:14px;min-height:48px;padding:0 14px}#member-sidebar .member-help{margin-top:28px}}
