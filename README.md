@@ -53,4 +53,6 @@ Before operating a real escrow service, complete legal, KYC/AML, sanctions, cust
 
 From the administrator dashboard (`/#admin` or `/admin`), use the **Site maintenance** control to show visitors a maintenance page with service and support details. The protected admin dashboard remains available at `/admin` so an administrator can turn the mode off. Maintenance state is stored in MongoDB.
 
+Existing signed-in members can continue reading and messaging their current escrow conversations and live support tickets while the public site is in maintenance. New account, deal, and payment actions remain unavailable until maintenance ends.
+
 In **Registered members**, administrators can disable or re-enable a member account. Disabled accounts cannot sign in and their records remain stored. **Delete data** permanently removes the account, its support conversations, messages, and escrow records after the administrator confirms the member's email. Deletion is blocked while the member has an active escrow; close or settle those escrows first.
